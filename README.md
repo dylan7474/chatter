@@ -25,6 +25,18 @@ No compile step is required.
 
 > You can also open `index.html` directly, but a local server is recommended for consistent browser behavior.
 
+### Container deploy (HTTPS)
+
+`deploy.sh` now serves the app over HTTPS by default (self-signed cert), which is needed for microphone access on non-localhost hosts.
+
+```bash
+./deploy.sh 3014 your.hostname.example
+```
+
+- Arg 1: exposed port (default `3014`)
+- Arg 2: certificate host/CN (default `localhost`)
+- Open `https://<host-or-ip>:<port>` and trust the self-signed cert in your browser.
+
 ## Basic controls
 
 - **Start Conversation**: begins microphone capture and starts a voice session.
@@ -38,7 +50,8 @@ No compile step is required.
 
 - **Microphone access blocked on a hostname (for example `http://ebg.dylanjones.org:3014`)**:
   browsers require a **secure context** for mic capture. Use HTTPS on your hostname
-  (for example `https://ebg.dylanjones.org`) or run locally via `http://localhost:<port>`.
+  (for example `https://ebg.dylanjones.org:3014` if you are still using that port), or run
+  locally via `http://localhost:<port>`.
 
 ## Roadmap (short)
 
