@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VoxScribe - Premium Speech to Text</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0B0F19;
+            background-image: 
+                radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
+                radial-gradient(at 50% 0%, hsla(225,39%,30%,0.1) 0, transparent 50%), 
+                radial-gradient(at 100% 0%, hsla(339,49%,30%,0.1) 0, transparent 50%);
+            color: #E2E8F0;
+        }
+
+        .glass-panel {
+            background: rgba(17, 24, 39, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .premium-btn {
+            background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            box-shadow: 0 0 15px rgba(99, 102, 241, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .premium-btn:hover {
+            box-shadow: 0 0 25px rgba(168, 85, 247, 0.5);
+            transform: translateY(-1px);
+        }
+
+        .stop-btn {
+            background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
+        #editorContainer::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 20px;
+            background: linear-gradient(to bottom, rgba(17, 24, 39, 0.9), transparent);
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .settings-modal {
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(20px);
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-300">
+
+    <div class="max-w-5xl mx-auto px-4 py-8 md:py-12">
+        <header class="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-6">
+            <div>
+                <h1 class="text-4xl font-bold text-white flex items-center gap-3 tracking-tight">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                        <i class="fa-solid fa-microphone-lines text-white text-xl"></i>
+                    </div>
+                    VoxScribe <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 text-2xl">Pro</span>
+                </h1>
+                <p class="text-slate-400 mt-2 text-sm font-medium tracking-wide">Conversational AI Voice Interface</p>
+            </div>
+            
+            <div class="flex items-center gap-4">
+                <select id="languageSelect" class="bg-slate-800/80 border border-slate-700 text-white rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer">
+                    <option value="en-GB" selected>English (UK)</option>
+                    <option value="en-US">English (US)</option>
+                    <option value="es-ES">Spanish (Spain)</option>
+                    <option value="fr-FR">French (France)</option>
+                    <option value="de-DE">German</option>
+                    <option value="zh-CN">Chinese (Mandarin)</option>
+                    <option value="ja-JP">Japanese</option>
+                </select>
+                <button id="openSettings" class="p-2.5 px-4 bg-slate-800/80 border border-slate-700 text-slate-400 hover:text-white rounded-xl transition-all shadow-inner" title="API Settings">
+                    <i class="fa-solid fa-gear"></i>
+                </button>
+                <div id="statusIndicator" class="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-xs font-bold text-slate-400 uppercase tracking-widest transition-all shadow-inner">
+                    <span class="w-2 h-2 rounded-full bg-slate-500" id="statusDot"></span>
+                    <span id="statusText">Standby</span>
+                </div>
+            </div>
+        </header>
+
+        <main class="glass-panel rounded-2xl overflow-hidden relative">
+            <div class="border-b border-white/5 p-4 md:px-6 bg-slate-900/40 flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center gap-4">
+                    <button id="startBtn" class="premium-btn flex items-center gap-2 text-white px-6 py-2.5 rounded-xl font-semibold transition-all active:scale-95">
+                        <i class="fa-solid fa-comments text-sm"></i> Start Conversation
+                    </button>
+                    <button id="stopBtn" class="stop-btn hidden flex items-center gap-2 text-white px-6 py-2.5 rounded-xl font-semibold transition-all active:scale-95">
+                        <i class="fa-solid fa-power-off text-sm"></i> End Session
+                    </button>
+                    
+                    <div class="h-8 w-32 flex items-center justify-center opacity-0 transition-opacity duration-500" id="visualizerContainer">
+                        <canvas id="voxMeter" width="120" height="24"></canvas>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3 bg-slate-800/50 p-2 rounded-xl border border-white/5">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider hidden sm:block">AI Backend:</span>
+                    <select id="aiModelSelect" class="bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer min-w-[150px]">
+                        <option value="gemini">Gemini 2.5 (Cloud)</option>
+                        <optgroup label="Local Ollama" id="ollamaGroup">
+                            <option value="" disabled>Searching local...</option>
+                        </optgroup>
+                    </select>
+                </div>
+            </div>
+
+            <div id="editorContainer" class="relative">
+                <div id="transcriptArea" class="min-h-[450px] max-h-[650px] overflow-y-auto p-6 md:p-10 text-lg md:text-xl leading-relaxed text-slate-200 custom-scrollbar flex flex-col gap-4 focus:outline-none" contenteditable="false">
+                    <div class="text-center w-full mt-10" id="initialPlaceholder">
+                        <span class="text-slate-600 italic font-light">Click "Start Conversation" and say hello...</span>
+                    </div>
+                </div>
+                
+                <div id="toast" class="absolute bottom-6 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-6 py-3 rounded-full text-sm font-bold shadow-lg shadow-indigo-600/30 opacity-0 transition-all transform translate-y-4 pointer-events-none flex items-center gap-2 z-50">
+                    <i class="fa-solid fa-circle-check"></i> <span id="toastMsg">Action successful!</span>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+        <div class="settings-modal border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl">
+            <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-key text-indigo-400"></i> API Settings
+            </h3>
+            <p class="text-slate-400 text-sm mb-6">Enter your Gemini API key to use cloud features. You can get one for free at <a href="https://aistudio.google.com/" target="_blank" class="text-indigo-400 hover:underline">Google AI Studio</a>.</p>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block">Gemini API Key</label>
+                    <input type="password" id="apiKeyInput" placeholder="Paste your key here" class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                </div>
+                <div class="flex gap-3 mt-8">
+                    <button id="saveSettings" class="flex-1 premium-btn text-white py-3 rounded-xl font-bold">Save Changes</button>
+                    <button id="closeSettings" class="px-6 bg-slate-800 text-slate-400 rounded-xl font-bold">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Modal -->
+    <div id="errorModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl p-8 max-w-md w-full shadow-2xl">
+            <div class="w-16 h-16 bg-red-500/10 border border-red-500/20 text-red-500 rounded-2xl flex items-center justify-center text-2xl mb-6 shadow-[0_0_15px_rgba(239,68,68,0.2)]">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h3 class="text-xl font-bold text-white mb-2">Notice</h3>
+            <p class="text-slate-400 mb-6 text-sm leading-relaxed" id="errorMessage"></p>
+            <button onclick="document.getElementById('errorModal').classList.add('hidden')" class="w-full bg-slate-100 text-slate-900 py-3 rounded-xl font-bold hover:bg-white transition-colors">Got it</button>
+        </div>
+    </div>
+
+    <script>
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        
+        let isRecording = false;
+        let sessionActive = false;
+        let finalTranscript = '';
+        let recognition = null;
+        let chatHistory = [];
+        let isAITalking = false;
+        
+        window.speechUtterances = []; 
+        let streamComplete = false;
+        let chunksSpeaking = 0;
+        let silenceTimer = null;
+
+        let audioContext, analyser, microphone, animationId, globalStream;
+        const canvas = document.getElementById('voxMeter');
+        const canvasCtx = canvas.getContext('2d');
+        const visualizerContainer = document.getElementById('visualizerContainer');
+
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const openSettings = document.getElementById('openSettings');
+        const closeSettings = document.getElementById('closeSettings');
+        const saveSettings = document.getElementById('saveSettings');
+        const settingsModal = document.getElementById('settingsModal');
+        const apiKeyInput = document.getElementById('apiKeyInput');
+        const languageSelect = document.getElementById('languageSelect');
+        const aiModelSelect = document.getElementById('aiModelSelect');
+        const ollamaGroup = document.getElementById('ollamaGroup');
+        const transcriptArea = document.getElementById('transcriptArea');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const toast = document.getElementById('toast');
+        const toastMsg = document.getElementById('toastMsg');
+        const errorModal = document.getElementById('errorModal');
+        const errorMessage = document.getElementById('errorMessage');
+
+        const synth = window.speechSynthesis;
+
+        // --- PERSISTENCE LOGIC ---
+        let savedApiKey = localStorage.getItem('voxscribe_gemini_key') || "";
+        apiKeyInput.value = savedApiKey;
+
+        const savedLang = localStorage.getItem('voxscribe_language');
+        if (savedLang) languageSelect.value = savedLang;
+
+        languageSelect.addEventListener('change', () => {
+            localStorage.setItem('voxscribe_language', languageSelect.value);
+            if (sessionActive) { 
+                recognition.stop(); 
+                setTimeout(() => { recognition.lang = languageSelect.value; recognition.start(); }, 400); 
+            } 
+        });
+
+        aiModelSelect.addEventListener('change', () => {
+            localStorage.setItem('voxscribe_ai_model', aiModelSelect.value);
+        });
+
+        async function fetchOllamaModels() {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 2000);
+                const response = await fetch('http://127.0.0.1:11434/api/tags', { signal: controller.signal });
+                clearTimeout(timeoutId);
+                if (!response.ok) throw new Error();
+                const data = await response.json();
+                
+                ollamaGroup.innerHTML = '';
+                if (data.models && data.models.length > 0) {
+                    data.models.forEach(model => {
+                        const option = document.createElement('option');
+                        option.value = 'ollama:' + model.name;
+                        option.textContent = model.name;
+                        ollamaGroup.appendChild(option);
+                    });
+                    
+                    const savedModel = localStorage.getItem('voxscribe_ai_model');
+                    if (savedModel && savedModel.startsWith('ollama:')) {
+                        const exists = data.models.some(m => 'ollama:' + m.name === savedModel);
+                        if (exists) aiModelSelect.value = savedModel;
+                    }
+                } else {
+                    ollamaGroup.innerHTML = '<option value="" disabled>No models found</option>';
+                }
+            } catch (error) {
+                ollamaGroup.innerHTML = '<option value="" disabled>Local Ollama unreachable</option>';
+            }
+        }
+        fetchOllamaModels();
+
+        async function getPersistentMicStream() {
+            if (globalStream) return globalStream;
+            try {
+                globalStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                return globalStream;
+            } catch (err) {
+                showError("Microphone access was denied. Hosting this on a local server (http://localhost:port) helps browsers remember your choice.");
+                return null;
+            }
+        }
+
+        async function fetchWithRetry(url, options, retries = 3, backoff = 1000) {
+            try {
+                const response = await fetch(url, options);
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                return response;
+            } catch (error) {
+                if (retries <= 0) throw error;
+                await new Promise(resolve => setTimeout(resolve, backoff));
+                return fetchWithRetry(url, options, retries - 1, backoff * 2);
+            }
+        }
+
+        function startVisualizer(stream) {
+            if (!stream) return;
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                microphone = audioContext.createMediaStreamSource(stream);
+                microphone.connect(analyser);
+                analyser.fftSize = 64;
+            }
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            visualizerContainer.classList.remove('opacity-0');
+
+            function draw() {
+                if(!isRecording) return;
+                animationId = requestAnimationFrame(draw);
+                analyser.getByteFrequencyData(dataArray);
+                canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+                const barWidth = (canvas.width / bufferLength) * 1.5;
+                let x = 0;
+                for(let i = 0; i < bufferLength; i++) {
+                    let barHeight = (dataArray[i] / 255) * canvas.height;
+                    if(barHeight < 2) barHeight = 2; 
+                    canvasCtx.fillStyle = `rgb(${99 + (barHeight * 2)}, 102, ${241 + barHeight})`;
+                    const y = (canvas.height - barHeight) / 2;
+                    canvasCtx.beginPath();
+                    canvasCtx.roundRect(x, y, barWidth - 1, barHeight, 2);
+                    canvasCtx.fill();
+                    x += barWidth;
+                }
+            }
+            draw();
+        }
+
+        function stopVisualizer() {
+            if (animationId) cancelAnimationFrame(animationId);
+            visualizerContainer.classList.add('opacity-0');
+        }
+
+        function initRecognition() {
+            if (!SpeechRecognition) return;
+            recognition = new SpeechRecognition();
+            recognition.continuous = true; 
+            recognition.interimResults = true;
+            recognition.lang = languageSelect.value;
+
+            recognition.onstart = () => {
+                isRecording = true;
+                updateUI();
+                startVisualizer(globalStream);
+            };
+
+            recognition.onresult = (event) => {
+                // AGGRESSIVE ECHO PREVENTION: 
+                // If AI is talking, immediately discard and clear buffers.
+                if (isAITalking) {
+                    finalTranscript = '';
+                    return;
+                }
+
+                clearTimeout(silenceTimer);
+                let interimTranscript = '';
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript + ' ';
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+                
+                updateCurrentTranscriptUI(interimTranscript);
+
+                // Start silence timer to trigger AI
+                silenceTimer = setTimeout(() => {
+                    const text = finalTranscript.trim();
+                    if (text.length > 0) {
+                        handleUserMessage(text);
+                        finalTranscript = ''; 
+                    }
+                }, 1600);
+            };
+
+            recognition.onerror = (event) => {
+                if (event.error === 'no-speech' || event.error === 'aborted') return;
+                console.error('Recognition error:', event.error);
+                if (event.error === 'not-allowed') {
+                    showError("Mic permission blocked. Check URL bar Shield/Lock icon.");
+                }
+                stopSession();
+            };
+
+            recognition.onend = () => {
+                if (sessionActive) {
+                    try { recognition.start(); } catch(e) {}
+                } else {
+                    stopVisualizer();
+                    isRecording = false;
+                    updateUI();
+                }
+            };
+        }
+
+        function updateCurrentTranscriptUI(interim = '') {
+            const tempMsg = document.getElementById('temp-msg');
+            if (tempMsg) tempMsg.remove();
+            const placeholder = document.getElementById('initialPlaceholder');
+            if (placeholder) placeholder.remove();
+
+            if (finalTranscript || interim) {
+                const msgDiv = document.createElement('div');
+                msgDiv.id = 'temp-msg';
+                msgDiv.className = 'self-end bg-indigo-600/20 border border-indigo-500/30 text-indigo-100 rounded-2xl rounded-tr-sm px-5 py-3 max-w-[85%] shadow-md ml-auto';
+                msgDiv.innerHTML = `<span class="text-slate-200">${finalTranscript}</span><span class="text-indigo-400 opacity-70">${interim}</span>`;
+                transcriptArea.appendChild(msgDiv);
+                transcriptArea.scrollTop = transcriptArea.scrollHeight;
+            }
+        }
+
+        function appendMessageToChat(role, text) {
+            const placeholder = document.getElementById('initialPlaceholder');
+            if (placeholder) placeholder.remove();
+            const tempMsg = document.getElementById('temp-msg');
+            if (tempMsg) tempMsg.remove();
+
+            const msgDiv = document.createElement('div');
+            if (role === 'user') {
+                msgDiv.className = 'self-end bg-indigo-600 text-white rounded-2xl rounded-tr-sm px-5 py-3 max-w-[85%] shadow-lg shadow-indigo-600/20 ml-auto';
+            } else {
+                msgDiv.className = 'self-start bg-slate-800 border border-slate-700 text-slate-200 rounded-2xl rounded-tl-sm px-5 py-3 max-w-[85%] shadow-lg mr-auto';
+            }
+            msgDiv.innerText = text;
+            transcriptArea.appendChild(msgDiv);
+            transcriptArea.scrollTop = transcriptArea.scrollHeight;
+            chatHistory.push({ role: role, content: text });
+        }
+
+        function speakFullResponse(text) {
+            if (!text.trim()) {
+                checkConversationResume();
+                return;
+            }
+            
+            chunksSpeaking++;
+            const utterance = new SpeechSynthesisUtterance(text);
+            const targetLang = languageSelect.value; 
+            utterance.lang = targetLang;
+            
+            const voices = synth.getVoices();
+            const preferredVoice = voices.find(v => v.lang === targetLang) 
+                || voices.find(v => v.lang.startsWith(targetLang.split('-')[0])) 
+                || voices[0];
+            
+            if (preferredVoice) utterance.voice = preferredVoice;
+            utterance.rate = 1.05; 
+            
+            window.speechUtterances.push(utterance);
+
+            utterance.onend = () => {
+                chunksSpeaking--;
+                const idx = window.speechUtterances.indexOf(utterance);
+                if (idx > -1) window.speechUtterances.splice(idx, 1);
+                checkConversationResume();
+            };
+            utterance.onerror = () => { chunksSpeaking--; checkConversationResume(); };
+            synth.speak(utterance);
+        }
+
+        function checkConversationResume() {
+            if (streamComplete && chunksSpeaking === 0) {
+                // INCREASED ECHO GUARD GAP: 
+                // We wait 1 full second after AI finishes to ensure speakers are silent 
+                // and any internal browser STT buffer is cleared.
+                setTimeout(() => {
+                    finalTranscript = ''; // Extra wipe of the transcript buffer
+                    isAITalking = false;
+                    statusDot.classList.remove('recording-pulse');
+                    if (sessionActive) updateUI(); 
+                }, 1000);
+            }
+        }
+
+        async function handleUserMessage(text) {
+            const exitPhrases = ['goodbye', 'bye bye', 'stop talking', 'exit conversation', 'shut down'];
+            if (exitPhrases.some(p => text.toLowerCase().includes(p))) {
+                appendMessageToChat('user', text);
+                appendMessageToChat('assistant', "Goodbye! Session terminated.");
+                speakFullResponse("Goodbye! Session terminated.");
+                streamComplete = true;
+                setTimeout(() => stopSession(), 2000);
+                return;
+            }
+
+            appendMessageToChat('user', text);
+            const selectedModel = aiModelSelect.value;
+            
+            // ACTIVATE MUTE:
+            isAITalking = true; 
+            finalTranscript = ''; // Clear user text buffer immediately
+            clearTimeout(silenceTimer); // Stop any pending AI triggers
+            
+            streamComplete = false;
+            chunksSpeaking = 0;
+            window.speechUtterances = []; 
+
+            statusText.innerText = "AI Thinking...";
+            statusIndicator.className = "flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs font-bold text-purple-400 uppercase tracking-widest transition-all shadow-inner";
+            statusDot.className = "w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_12px_rgba(168,85,247,0.8)]";
+            statusDot.classList.add('recording-pulse');
+
+            const systemPrompt = "You are a friendly, natural British person having a casual spoken conversation. Keep your responses extremely brief (usually one sentence, max two). Speak casually and warmly. Avoid formal AI language, lists, or markdown. Just act like a mate chatting over tea.";
+
+            try {
+                if (selectedModel === 'gemini') {
+                    if (!savedApiKey) throw new Error("Missing Gemini API Key. Check Settings.");
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${savedApiKey}`;
+                    const geminiContents = chatHistory.map(msg => ({
+                        role: msg.role === 'assistant' ? 'model' : 'user',
+                        parts: [{ text: msg.content }]
+                    }));
+                    
+                    const response = await fetchWithRetry(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ systemInstruction: { parts: [{ text: systemPrompt }] }, contents: geminiContents })
+                    });
+                    
+                    const data = await response.json();
+                    const aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response.";
+                    
+                    appendMessageToChat('assistant', aiResponse);
+                    statusText.innerText = "AI Speaking...";
+                    streamComplete = true;
+                    speakFullResponse(aiResponse);
+
+                } else if (selectedModel.startsWith('ollama:')) {
+                    const ollamaModelName = selectedModel.replace('ollama:', '');
+                    const msgDiv = document.createElement('div');
+                    msgDiv.className = 'self-start bg-slate-800 border border-slate-700 text-slate-200 rounded-2xl rounded-tl-sm px-5 py-3 max-w-[85%] shadow-lg mr-auto';
+                    transcriptArea.appendChild(msgDiv);
+
+                    const response = await fetchWithRetry('http://127.0.0.1:11434/api/chat', {
+                        method: 'POST',
+                        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ model: ollamaModelName, messages: [{ role: 'system', content: systemPrompt }, ...chatHistory], stream: true })
+                    });
+                    
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder("utf-8");
+                    let aiResponseText = "", streamBuffer = "";
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) {
+                            streamComplete = true;
+                            statusText.innerText = "AI Speaking...";
+                            speakFullResponse(aiResponseText);
+                            break;
+                        }
+                        streamBuffer += decoder.decode(value, { stream: true });
+                        const lines = streamBuffer.split('\n');
+                        streamBuffer = lines.pop(); 
+                        for (const line of lines) {
+                            if (!line.trim()) continue;
+                            try {
+                                const json = JSON.parse(line);
+                                aiResponseText += json.message?.content || "";
+                                msgDiv.innerText = aiResponseText;
+                                transcriptArea.scrollTop = transcriptArea.scrollHeight;
+                            } catch (e) {}
+                        }
+                    }
+                    chatHistory.push({ role: 'assistant', content: aiResponseText });
+                }
+            } catch (error) {
+                appendMessageToChat('assistant', `Error: ${error.message}`);
+                streamComplete = true; 
+                checkConversationResume();
+            }
+        }
+
+        async function startSession() {
+            if (sessionActive) return;
+            const stream = await getPersistentMicStream();
+            if (!stream) return;
+            if (synth.speaking) synth.cancel();
+            finalTranscript = '';
+            recognition.lang = languageSelect.value;
+            sessionActive = true;
+            try { recognition.start(); } catch (e) {}
+        }
+
+        function stopSession() {
+            sessionActive = false;
+            if (recognition) recognition.stop();
+            if (synth.speaking) synth.cancel();
+            isAITalking = false;
+            window.speechUtterances = [];
+            chunksSpeaking = 0;
+            stopVisualizer();
+            updateUI();
+        }
+
+        function updateUI() {
+            if (isAITalking) return; 
+            if (isRecording) {
+                startBtn.classList.add('hidden');
+                stopBtn.classList.remove('hidden');
+                statusIndicator.className = "flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-xs font-bold text-red-400 uppercase tracking-widest transition-all shadow-inner";
+                statusDot.className = "w-2 h-2 rounded-full bg-red-500 shadow-[0_0_12px_rgba(239,68,68,0.8)]";
+                statusText.innerText = "Listening...";
+            } else {
+                startBtn.classList.remove('hidden');
+                stopBtn.classList.add('hidden');
+                statusIndicator.className = "flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-xs font-bold text-slate-400 uppercase tracking-widest transition-all shadow-inner";
+                statusDot.className = "w-2 h-2 rounded-full bg-slate-500 shadow-[0_0_8px_rgba(100,116,139,0.5)]";
+                statusDot.classList.remove('recording-pulse');
+                statusText.innerText = "Standby";
+            }
+        }
+
+        function showError(msg) { errorMessage.innerText = msg; errorModal.classList.remove('hidden'); }
+
+        startBtn.addEventListener('click', startSession);
+        stopBtn.addEventListener('click', stopSession);
+        
+        openSettings.addEventListener('click', () => settingsModal.classList.remove('hidden'));
+        closeSettings.addEventListener('click', () => settingsModal.classList.add('hidden'));
+        saveSettings.addEventListener('click', () => {
+            savedApiKey = apiKeyInput.value.trim();
+            localStorage.setItem('voxscribe_gemini_key', savedApiKey);
+            settingsModal.classList.add('hidden');
+            toastMsg.innerText = "Settings Saved";
+            toast.style.opacity = '1';
+            setTimeout(() => toast.style.opacity = '0', 2000);
+        });
+        
+        if (speechSynthesis.onvoiceschanged !== undefined) {
+            speechSynthesis.onvoiceschanged = () => synth.getVoices();
+        }
+
+        initRecognition();
+    </script>
+</body>
+</html>
