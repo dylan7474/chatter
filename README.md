@@ -42,7 +42,7 @@ No compile step is required.
 - **Start Conversation**: begins microphone capture and starts a voice session.
 - **End Session**: stops the active voice/chat session.
 - **Language selector**: sets speech recognition language.
-- **AI Backend selector**: choose Gemini cloud or a local Ollama model.
+- **AI Backend selector**: choose a local Ollama model, plus Gemini cloud when a Gemini API key is saved in **Settings**.
 - **Settings (gear icon)**: save/update Gemini API key.
 - **Transcript panel**: shows conversation turns and current output.
 
