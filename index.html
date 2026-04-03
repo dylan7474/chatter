@@ -270,12 +270,20 @@
         }
         fetchOllamaModels();
 
+        function getSecureOriginHint() {
+            const isLocalhost = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
+            if (isLocalhost) return "http://localhost:<port>";
+
+            const httpsPort = window.location.port === '80' ? '' : (window.location.port ? `:${window.location.port}` : '');
+            return `https://${window.location.hostname}${httpsPort}`;
+        }
+
         function getMicAccessHelpMessage(err = null) {
             const isInsecureContext = !window.isSecureContext;
             const noMediaDevices = !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia;
 
             if (isInsecureContext || noMediaDevices) {
-                return "Microphone requires a secure origin. Open this app on https://ebg.dylanjones.org (or another HTTPS URL), or use http://localhost:<port> locally.";
+                return `Microphone requires a secure origin. Open this app on ${getSecureOriginHint()} (or another HTTPS URL), or use http://localhost:<port> locally.`;
             }
 
             if (err && (err.name === 'NotAllowedError' || err.name === 'SecurityError')) {
