@@ -270,13 +270,28 @@
         }
         fetchOllamaModels();
 
+        function getMicAccessHelpMessage(err = null) {
+            const isInsecureContext = !window.isSecureContext;
+            const noMediaDevices = !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia;
+
+            if (isInsecureContext || noMediaDevices) {
+                return "Microphone requires a secure origin. Open this app on https://ebg.dylanjones.org (or another HTTPS URL), or use http://localhost:<port> locally.";
+            }
+
+            if (err && (err.name === 'NotAllowedError' || err.name === 'SecurityError')) {
+                return "Mic permission was blocked. Use the browser lock icon to allow microphone access, then reload.";
+            }
+
+            return "Could not access the microphone. Verify OS/browser mic permissions, then try again.";
+        }
+
         async function getPersistentMicStream() {
             if (globalStream) return globalStream;
             try {
                 globalStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
                 return globalStream;
             } catch (err) {
-                showError("Microphone access was denied. Hosting this on a local server (http://localhost:port) helps browsers remember your choice.");
+                showError(getMicAccessHelpMessage(err));
                 return null;
             }
         }
@@ -579,6 +594,10 @@
 
         async function startSession() {
             if (sessionActive) return;
+            if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                showError(getMicAccessHelpMessage());
+                return;
+            }
             const stream = await getPersistentMicStream();
             if (!stream) return;
             if (synth.speaking) synth.cancel();
