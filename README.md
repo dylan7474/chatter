@@ -34,6 +34,12 @@ No compile step is required.
 - **Settings (gear icon)**: save/update Gemini API key.
 - **Transcript panel**: shows conversation turns and current output.
 
+## Troubleshooting
+
+- **Microphone access blocked on a hostname (for example `http://ebg.dylanjones.org:3014`)**:
+  browsers require a **secure context** for mic capture. Use HTTPS on your hostname
+  (for example `https://ebg.dylanjones.org`) or run locally via `http://localhost:<port>`.
+
 ## Roadmap (short)
 
 - Add keyboard accessibility shortcuts for all primary actions.
