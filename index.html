@@ -559,7 +559,7 @@
             try {
                 if (selectedModel === 'gemini') {
                     if (!savedApiKey) throw new Error("Missing Gemini API Key. Check Settings.");
-                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${savedApiKey}`;
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${savedApiKey}`;
                     const geminiContents = chatHistory.map(msg => ({
                         role: msg.role === 'assistant' ? 'model' : 'user',
                         parts: [{ text: msg.content }]
