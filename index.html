@@ -431,7 +431,7 @@
             };
 
             recognition.onend = () => {
-                if (sessionActive) {
+                if (sessionActive && !isAITalking) {
                     try { recognition.start(); } catch(e) {}
                 } else {
                     stopVisualizer();
@@ -515,7 +515,10 @@
                     finalTranscript = ''; // Extra wipe of the transcript buffer
                     isAITalking = false;
                     statusDot.classList.remove('recording-pulse');
-                    if (sessionActive) updateUI(); 
+                    if (sessionActive) {
+                        try { recognition.start(); } catch (e) {}
+                        updateUI();
+                    }
                 }, 1000);
             }
         }
@@ -538,6 +541,9 @@
             isAITalking = true; 
             finalTranscript = ''; // Clear user text buffer immediately
             clearTimeout(silenceTimer); // Stop any pending AI triggers
+            if (recognition) {
+                try { recognition.stop(); } catch (e) {}
+            }
             
             streamComplete = false;
             chunksSpeaking = 0;
