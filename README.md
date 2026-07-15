@@ -25,17 +25,16 @@ No compile step is required.
 
 > You can also open `index.html` directly, but a local server is recommended for consistent browser behavior.
 
-### Container deploy (HTTPS)
+### Container deploy
 
-`deploy.sh` now serves the app over HTTPS by default (self-signed cert), which is needed for microphone access on non-localhost hosts.
+`deploy.sh` builds a small Nginx container that serves the app from `index.html`.
 
 ```bash
-./deploy.sh 3014 your.hostname.example
+./deploy.sh 3014
 ```
 
 - Arg 1: exposed port (default `3014`)
-- Arg 2: certificate host/CN (default `localhost`)
-- Open `https://<host-or-ip>:<port>` and trust the self-signed cert in your browser.
+- Open `http://localhost:<port>/` or `http://localhost:<port>/index.html`.
 
 ## Basic controls
 
