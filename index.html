@@ -688,16 +688,39 @@
             }
         }
 
+        function getStreamingSpeechSplitIndex(forceFlush = false) {
+            const punctuationMatch = streamingSpeechBuffer.match(/[.!?;:](\s|$)/);
+            if (punctuationMatch) return punctuationMatch.index + 1;
+
+            if (!forceFlush && streamingSpeechBuffer.length < 45) return -1;
+
+            const preferredWindow = streamingSpeechBuffer.slice(0, 90);
+            const lastBoundary = Math.max(
+                preferredWindow.lastIndexOf(','),
+                preferredWindow.lastIndexOf(' '),
+                preferredWindow.lastIndexOf('\n')
+            );
+
+            if (lastBoundary > 20) return lastBoundary + 1;
+            return forceFlush ? streamingSpeechBuffer.length : -1;
+        }
+
         function queueStreamingSpeechChunk(chunkText, flush = false) {
             if (!isChunkedLocalTtsEngine()) return;
             streamingSpeechBuffer += chunkText;
-            const punctuationIndex = streamingSpeechBuffer.search(/[.!?;:](\s|$)/);
-            if (!flush && punctuationIndex === -1 && streamingSpeechBuffer.length < 90) return;
 
-            const splitIndex = punctuationIndex === -1 ? streamingSpeechBuffer.length : punctuationIndex + 1;
-            const textToSpeak = streamingSpeechBuffer.slice(0, splitIndex).trim();
-            streamingSpeechBuffer = flush ? '' : streamingSpeechBuffer.slice(splitIndex);
-            if (textToSpeak) speakWithLocalTts(textToSpeak);
+            while (streamingSpeechBuffer.trim()) {
+                const splitIndex = getStreamingSpeechSplitIndex(flush);
+                if (splitIndex === -1) break;
+
+                const textToSpeak = streamingSpeechBuffer.slice(0, splitIndex).trim();
+                streamingSpeechBuffer = streamingSpeechBuffer.slice(splitIndex);
+                if (textToSpeak) speakWithLocalTts(textToSpeak);
+
+                if (!flush) break;
+            }
+
+            if (flush && !streamingSpeechBuffer.trim()) streamingSpeechBuffer = '';
         }
 
         function checkConversationResume() {
