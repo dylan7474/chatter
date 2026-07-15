@@ -179,6 +179,11 @@
                     <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block">Gemini API Key</label>
                     <input type="password" id="apiKeyInput" placeholder="Paste your key here" class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
                 </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="promptInstructionsInput">Prompt behaviour / personality</label>
+                    <textarea id="promptInstructionsInput" rows="5" placeholder="Leave blank to use the default friendly British chat style." class="w-full resize-y bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all custom-scrollbar"></textarea>
+                    <p class="text-xs text-slate-500 mt-2">When saved, this replaces the default assistant personality instructions.</p>
+                </div>
                 <div class="flex gap-3 mt-8">
                     <button id="saveSettings" class="flex-1 premium-btn text-white py-3 rounded-xl font-bold">Save Changes</button>
                     <button id="closeSettings" class="px-6 bg-slate-800 text-slate-400 rounded-xl font-bold">Close</button>
@@ -226,6 +231,7 @@
         const saveSettings = document.getElementById('saveSettings');
         const settingsModal = document.getElementById('settingsModal');
         const apiKeyInput = document.getElementById('apiKeyInput');
+        const promptInstructionsInput = document.getElementById('promptInstructionsInput');
         const languageSelect = document.getElementById('languageSelect');
         const aiModelSelect = document.getElementById('aiModelSelect');
         const streamingToggle = document.getElementById('streamingToggle');
@@ -247,8 +253,11 @@
         const synth = window.speechSynthesis;
 
         // --- PERSISTENCE LOGIC ---
+        const defaultSystemPrompt = "You are a friendly, natural British person having a casual spoken conversation. Keep your responses extremely brief (usually one sentence, max two). Speak casually and warmly. Avoid formal AI language, lists, or markdown. Just act like a mate chatting over tea.";
         let savedApiKey = localStorage.getItem('voxscribe_gemini_key') || "";
+        let savedPromptInstructions = localStorage.getItem('voxscribe_prompt_instructions') || "";
         apiKeyInput.value = savedApiKey;
+        promptInstructionsInput.value = savedPromptInstructions;
 
         const savedLang = localStorage.getItem('voxscribe_language');
         if (savedLang) languageSelect.value = savedLang;
@@ -791,7 +800,7 @@
             statusDot.className = "w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_12px_rgba(168,85,247,0.8)]";
             statusDot.classList.add('recording-pulse');
 
-            const systemPrompt = "You are a friendly, natural British person having a casual spoken conversation. Keep your responses extremely brief (usually one sentence, max two). Speak casually and warmly. Avoid formal AI language, lists, or markdown. Just act like a mate chatting over tea.";
+            const systemPrompt = savedPromptInstructions || defaultSystemPrompt;
 
             try {
                 const shouldStreamTokens = streamingToggle.checked;
@@ -961,7 +970,14 @@
         closeSettings.addEventListener('click', () => settingsModal.classList.add('hidden'));
         saveSettings.addEventListener('click', () => {
             savedApiKey = apiKeyInput.value.trim();
+            savedPromptInstructions = promptInstructionsInput.value.trim();
             localStorage.setItem('voxscribe_gemini_key', savedApiKey);
+            if (savedPromptInstructions) {
+                localStorage.setItem('voxscribe_prompt_instructions', savedPromptInstructions);
+            } else {
+                localStorage.removeItem('voxscribe_prompt_instructions');
+            }
+            promptInstructionsInput.value = savedPromptInstructions;
             updateGeminiOptionVisibility();
             settingsModal.classList.add('hidden');
             toastMsg.innerText = "Settings Saved";
