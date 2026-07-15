@@ -151,7 +151,15 @@
                     </div>
                 </div>
                 
-                <div id="toast" class="absolute bottom-6 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-6 py-3 rounded-full text-sm font-bold shadow-lg shadow-indigo-600/30 opacity-0 transition-all transform translate-y-4 pointer-events-none flex items-center gap-2 z-50">
+                <form id="textInputForm" class="border-t border-white/5 bg-slate-900/60 p-4 md:p-6 flex flex-col sm:flex-row gap-3" aria-label="Send typed message">
+                    <label for="textInput" class="sr-only">Type a message</label>
+                    <textarea id="textInput" rows="1" placeholder="Type a message instead of speaking..." class="flex-1 resize-none bg-slate-950/70 border border-slate-700 text-white placeholder:text-slate-500 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none transition-all custom-scrollbar" autocomplete="off"></textarea>
+                    <button id="sendTextBtn" type="submit" class="premium-btn flex items-center justify-center gap-2 text-white px-6 py-3 rounded-xl font-semibold transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fa-solid fa-paper-plane text-sm"></i> Send
+                    </button>
+                </form>
+
+                <div id="toast" class="absolute bottom-24 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-6 py-3 rounded-full text-sm font-bold shadow-lg shadow-indigo-600/30 opacity-0 transition-all transform translate-y-4 pointer-events-none flex items-center gap-2 z-50">
                     <i class="fa-solid fa-circle-check"></i> <span id="toastMsg">Action successful!</span>
                 </div>
             </div>
@@ -232,6 +240,9 @@
         const toastMsg = document.getElementById('toastMsg');
         const errorModal = document.getElementById('errorModal');
         const errorMessage = document.getElementById('errorMessage');
+        const textInputForm = document.getElementById('textInputForm');
+        const textInput = document.getElementById('textInput');
+        const sendTextBtn = document.getElementById('sendTextBtn');
 
         const synth = window.speechSynthesis;
 
@@ -726,6 +737,7 @@
 
         function checkConversationResume() {
             if (streamComplete && chunksSpeaking === 0) {
+                setTextInputDisabled(false);
                 // INCREASED ECHO GUARD GAP: 
                 // We wait 1 full second after AI finishes to ensure speakers are silent 
                 // and any internal browser STT buffer is cleared.
@@ -743,6 +755,7 @@
 
         async function handleUserMessage(text) {
             const exitPhrases = ['goodbye', 'bye bye', 'stop talking', 'exit conversation', 'shut down'];
+            setTextInputDisabled(true);
             if (exitPhrases.some(p => text.toLowerCase().includes(p))) {
                 appendMessageToChat('user', text);
                 appendMessageToChat('assistant', "Goodbye! Session terminated.");
@@ -754,6 +767,12 @@
 
             appendMessageToChat('user', text);
             const selectedModel = aiModelSelect.value;
+            if (!selectedModel) {
+                appendMessageToChat('assistant', 'Choose an AI backend before sending a message.');
+                streamComplete = true;
+                checkConversationResume();
+                return;
+            }
             
             // ACTIVATE MUTE:
             isAITalking = true; 
@@ -855,6 +874,17 @@
             }
         }
 
+        function setTextInputDisabled(disabled) {
+            textInput.disabled = disabled;
+            sendTextBtn.disabled = disabled;
+            textInput.placeholder = disabled ? 'Waiting for AI response...' : 'Type a message instead of speaking...';
+        }
+
+        function resizeTextInput() {
+            textInput.style.height = 'auto';
+            textInput.style.height = `${Math.min(textInput.scrollHeight, 160)}px`;
+        }
+
         async function startSession() {
             if (sessionActive) return;
             if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -882,6 +912,7 @@
             window.speechUtterances = [];
             chunksSpeaking = 0;
             stopVisualizer();
+            setTextInputDisabled(false);
             updateUI();
         }
 
@@ -907,6 +938,24 @@
 
         startBtn.addEventListener('click', startSession);
         stopBtn.addEventListener('click', stopSession);
+        textInput.addEventListener('input', resizeTextInput);
+        textInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                textInputForm.requestSubmit();
+            }
+        });
+        textInputForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            if (isAITalking || sendTextBtn.disabled) return;
+            const text = textInput.value.trim();
+            if (!text) return;
+            textInput.value = '';
+            resizeTextInput();
+            finalTranscript = '';
+            clearTimeout(silenceTimer);
+            handleUserMessage(text);
+        });
         
         openSettings.addEventListener('click', () => settingsModal.classList.remove('hidden'));
         closeSettings.addEventListener('click', () => settingsModal.classList.add('hidden'));
