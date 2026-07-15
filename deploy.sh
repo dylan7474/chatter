@@ -43,6 +43,9 @@ const indexHtml = fs.readFileSync('/app/index.html');
 const supportedVoices = new Set(['en-gb', 'en-us', 'es', 'fr', 'de', 'zh', 'ja']);
 const piperModel = process.env.PIPER_MODEL || '/app/piper/en_US-lessac-medium.onnx';
 const piperBinary = process.env.PIPER_BINARY || 'piper';
+const kokoroModel = process.env.KOKORO_MODEL || '/app/kokoro/kokoro-v1.0.onnx';
+const kokoroVoices = process.env.KOKORO_VOICES || '/app/kokoro/voices-v1.0.bin';
+const kokoroVoice = process.env.KOKORO_VOICE || 'af_heart';
 
 function send(res, status, headers, body) {
   res.writeHead(status, headers);
@@ -92,6 +95,36 @@ http.createServer((req, res) => {
       return;
     }
 
+    if (engine === 'kokoro') {
+      if (!fs.existsSync(kokoroModel) || !fs.existsSync(kokoroVoices)) {
+        return send(res, 503, { 'Content-Type': 'text/plain' }, 'Kokoro model files were not found');
+      }
+
+      const outputFile = `/tmp/kokoro-${Date.now()}-${Math.random().toString(16).slice(2)}.wav`;
+      const kokoroScript = `import sys
+from kokoro_onnx import Kokoro
+import soundfile as sf
+model, voices, output_file, voice = sys.argv[1:5]
+text = sys.stdin.read().strip()
+kokoro = Kokoro(model, voices)
+samples, sample_rate = kokoro.create(text, voice=voice, speed=1.0, lang='en-us')
+sf.write(output_file, samples, sample_rate)
+`;
+      const kokoro = spawn('python3', ['-c', kokoroScript, kokoroModel, kokoroVoices, outputFile, kokoroVoice], { stdio: ['pipe', 'ignore', 'pipe'] });
+      kokoro.stderr.on('data', chunk => console.error(chunk.toString()));
+      kokoro.on('error', fail);
+      kokoro.on('close', code => {
+        if (code !== 0) return fail(`Kokoro exited with status ${code}`);
+        res.writeHead(200, audioHeaders);
+        const wav = fs.createReadStream(outputFile);
+        wav.on('error', fail);
+        wav.on('close', () => fs.rm(outputFile, { force: true }, () => {}));
+        wav.pipe(res);
+      });
+      kokoro.stdin.end(text);
+      return;
+    }
+
     res.writeHead(200, audioHeaders);
     const espeak = spawn('espeak-ng', ['--stdout', '-v', voice, '-s', '165', text]);
     espeak.stdout.pipe(res);
@@ -114,10 +147,12 @@ cat > "${BUILD_DIR}/Dockerfile" <<'DOCKER_EOF'
 FROM node:22-bookworm-slim
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl espeak-ng python3-pip \
-  && pip3 install --break-system-packages --no-cache-dir piper-tts \
-  && mkdir -p /app/piper \
+  && pip3 install --break-system-packages --no-cache-dir piper-tts kokoro-onnx soundfile \
+  && mkdir -p /app/piper /app/kokoro \
   && curl -fsSL -o /app/piper/en_US-lessac-medium.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx \
   && curl -fsSL -o /app/piper/en_US-lessac-medium.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json \
+  && curl -fsSL -o /app/kokoro/kokoro-v1.0.onnx https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx \
+  && curl -fsSL -o /app/kokoro/voices-v1.0.bin https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
@@ -145,5 +180,5 @@ echo "Deployed ${PROJECT_NAME}."
 echo "URL: http://localhost:${PORT_ARG}/"
 echo "App file: http://localhost:${PORT_ARG}/index.html"
 echo "Local TTS: http://localhost:${PORT_ARG}/api/tts
-eSpeak and a default local Piper voice are bundled. Override PIPER_MODEL to use a mounted Piper .onnx voice model."
+eSpeak, a default local Piper voice, and Kokoro-82M are bundled. Override PIPER_MODEL to use a mounted Piper .onnx voice model, or KOKORO_MODEL/KOKORO_VOICES/KOKORO_VOICE for Kokoro."
 echo "========================================="

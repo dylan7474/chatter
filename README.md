@@ -35,8 +35,9 @@ No compile step is required.
 
 - Arg 1: exposed port (default `3014`)
 - Open `http://localhost:<port>/` or `http://localhost:<port>/index.html`.
-- The bundled local TTS endpoint is available at `http://localhost:<port>/api/tts` and is used when **TTS: Local eSpeak** or **TTS: Local Piper** is selected in the app.
+- The bundled local TTS endpoint is available at `http://localhost:<port>/api/tts` and is used when **TTS: Local eSpeak**, **TTS: Local Piper**, or **TTS: Local Kokoro-82M** is selected in the app.
 - **TTS: Local Piper** uses the same endpoint with `engine=piper`. The container includes a default `en_US-lessac-medium` Piper voice; set `PIPER_MODEL` to a mounted Piper `.onnx` voice model path if you want to override it.
+- **TTS: Local Kokoro-82M** uses the same endpoint with `engine=kokoro`. The container downloads Kokoro ONNX model files during build; set `KOKORO_MODEL`, `KOKORO_VOICES`, or `KOKORO_VOICE` to use mounted Kokoro files or a different voice.
 
 ## Basic controls
 
@@ -44,8 +45,8 @@ No compile step is required.
 - **End Session**: stops the active voice/chat session.
 - **Language selector**: sets speech recognition language.
 - **AI Backend selector**: choose a local Ollama model, plus Gemini cloud when a Gemini API key is saved in **Settings**.
-- **Stream tokens**: optionally render AI responses token-by-token as they arrive. With **TTS: Local eSpeak** or **TTS: Local Piper**, speech is queued in sentence or short phrase chunks as text streams in, so playback can start before the AI response is complete. Browser TTS still waits for the full response because browser speech synthesis does not accept incremental audio input.
-- **TTS selector**: choose browser speech synthesis, the deployed local eSpeak service, or the deployed local Piper service. The local options require running the app through `deploy.sh`; the container bundles eSpeak and a default Piper voice.
+- **Stream tokens**: optionally render AI responses token-by-token as they arrive. With **TTS: Local eSpeak**, **TTS: Local Piper**, or **TTS: Local Kokoro-82M**, speech is queued in sentence or short phrase chunks as text streams in, so playback can start before the AI response is complete. Browser TTS still waits for the full response because browser speech synthesis does not accept incremental audio input.
+- **TTS selector**: choose browser speech synthesis, the deployed local eSpeak service, the deployed local Piper service, or the deployed local Kokoro-82M service. The local options require running the app through `deploy.sh`; the container bundles eSpeak, a default Piper voice, and Kokoro-82M model files.
 - **Settings (gear icon)**: save/update Gemini API key.
 - **Transcript panel**: shows conversation turns and current output.
 
