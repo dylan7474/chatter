@@ -33,24 +33,97 @@ trap cleanup EXIT
 
 cp "${SCRIPT_DIR}/index.html" "${BUILD_DIR}/index.html"
 
-cat > "${BUILD_DIR}/nginx.conf" <<NGINX_EOF
-server {
-  listen ${PORT_ARG};
-  server_name _;
+cat > "${BUILD_DIR}/server.js" <<'NODE_EOF'
+const http = require('http');
+const fs = require('fs');
+const { spawn } = require('child_process');
 
-  root /usr/share/nginx/html;
-  index index.html;
+const port = Number(process.env.PORT || 3014);
+const indexHtml = fs.readFileSync('/app/index.html');
+const supportedVoices = new Set(['en-gb', 'en-us', 'es', 'fr', 'de', 'zh', 'ja']);
+const piperModel = process.env.PIPER_MODEL || '/app/piper/en_US-lessac-medium.onnx';
+const piperBinary = process.env.PIPER_BINARY || 'piper';
 
-  location / {
-    try_files \$uri \$uri/ /index.html;
-  }
+function send(res, status, headers, body) {
+  res.writeHead(status, headers);
+  res.end(body);
 }
-NGINX_EOF
+
+http.createServer((req, res) => {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+
+  if (url.pathname === '/api/tts') {
+    const text = (url.searchParams.get('text') || '').slice(0, 1200).trim();
+    const engine = (url.searchParams.get('engine') || 'espeak').toLowerCase();
+    const requestedVoice = (url.searchParams.get('voice') || 'en-gb').toLowerCase();
+    const voice = supportedVoices.has(requestedVoice) ? requestedVoice : 'en-gb';
+
+    if (!text) return send(res, 400, { 'Content-Type': 'text/plain' }, 'Missing text');
+    const audioHeaders = {
+      'Content-Type': 'audio/wav',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff'
+    };
+
+    const fail = error => {
+      console.error(error);
+      if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain' });
+      res.end('TTS failed');
+    };
+
+    if (engine === 'piper') {
+      if (!fs.existsSync(piperModel)) {
+        return send(res, 503, { 'Content-Type': 'text/plain' }, `Piper model was not found at ${piperModel}`);
+      }
+
+      const outputFile = `/tmp/piper-${Date.now()}-${Math.random().toString(16).slice(2)}.wav`;
+      const piper = spawn(piperBinary, ['--model', piperModel, '--output_file', outputFile]);
+      piper.stderr.on('data', chunk => console.error(chunk.toString()));
+      piper.on('error', fail);
+      piper.on('close', code => {
+        if (code !== 0) return fail(`Piper exited with status ${code}`);
+        res.writeHead(200, audioHeaders);
+        const wav = fs.createReadStream(outputFile);
+        wav.on('error', fail);
+        wav.on('close', () => fs.rm(outputFile, { force: true }, () => {}));
+        wav.pipe(res);
+      });
+      piper.stdin.end(text);
+      return;
+    }
+
+    res.writeHead(200, audioHeaders);
+    const espeak = spawn('espeak-ng', ['--stdout', '-v', voice, '-s', '165', text]);
+    espeak.stdout.pipe(res);
+    espeak.stderr.on('data', chunk => console.error(chunk.toString()));
+    espeak.on('error', fail);
+    return;
+  }
+
+  if (url.pathname === '/' || url.pathname === '/index.html') {
+    return send(res, 200, { 'Content-Type': 'text/html; charset=utf-8' }, indexHtml);
+  }
+
+  send(res, 404, { 'Content-Type': 'text/plain' }, 'Not found');
+}).listen(port, '0.0.0.0', () => {
+  console.log(`Chatter listening on http://0.0.0.0:${port}`);
+});
+NODE_EOF
 
 cat > "${BUILD_DIR}/Dockerfile" <<'DOCKER_EOF'
-FROM nginx:1.29-alpine
-COPY index.html /usr/share/nginx/html/index.html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+FROM node:22-bookworm-slim
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates curl espeak-ng python3-pip \
+  && pip3 install --break-system-packages --no-cache-dir piper-tts \
+  && mkdir -p /app/piper \
+  && curl -fsSL -o /app/piper/en_US-lessac-medium.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx \
+  && curl -fsSL -o /app/piper/en_US-lessac-medium.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY index.html server.js ./
+ENV PORT=3014
+CMD ["node", "server.js"]
 DOCKER_EOF
 
 echo "Building Docker image..."
@@ -63,6 +136,7 @@ echo "Starting container..."
 docker run -d \
   --name "${CONTAINER_NAME}" \
   -p "${PORT_ARG}:${PORT_ARG}" \
+  -e PORT="${PORT_ARG}" \
   --restart unless-stopped \
   "${IMAGE_NAME}" >/dev/null
 
@@ -70,4 +144,6 @@ echo "========================================="
 echo "Deployed ${PROJECT_NAME}."
 echo "URL: http://localhost:${PORT_ARG}/"
 echo "App file: http://localhost:${PORT_ARG}/index.html"
+echo "Local TTS: http://localhost:${PORT_ARG}/api/tts
+eSpeak and a default local Piper voice are bundled. Override PIPER_MODEL to use a mounted Piper .onnx voice model."
 echo "========================================="
