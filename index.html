@@ -138,6 +138,7 @@
                             <option value="browser">Browser</option>
                             <option value="espeak">Local eSpeak</option>
                             <option value="piper">Local Piper</option>
+                            <option value="kokoro">Local Kokoro-82M</option>
                         </select>
                     </label>
                 </div>
@@ -607,7 +608,7 @@
         }
 
         function isChunkedLocalTtsEngine() {
-            return ['espeak', 'piper'].includes(getSelectedTtsEngine());
+            return ['espeak', 'piper', 'kokoro'].includes(getSelectedTtsEngine());
         }
 
         function playNextTtsAudio() {
@@ -643,7 +644,7 @@
             } catch (error) {
                 chunksSpeaking--;
                 console.error(`Local ${engine} TTS failed:`, error);
-                showError(`Local ${engine} TTS is unavailable. Run ./deploy.sh to use bundled local eSpeak/Piper TTS, or switch TTS back to Browser.`);
+                showError(`Local ${engine} TTS is unavailable. Run ./deploy.sh to use bundled local eSpeak/Piper/Kokoro TTS, or switch TTS back to Browser.`);
                 speakWithBrowser(text);
             }
         }
