@@ -18,6 +18,16 @@ cleanup() {
 }
 trap cleanup EXIT
 
+if ! [[ "$PORT_ARG" =~ ^[0-9]+$ ]] || [ "$PORT_ARG" -lt 1 ] || [ "$PORT_ARG" -gt 65535 ]; then
+  echo "Error: port must be a number between 1 and 65535." >&2
+  exit 1
+fi
+
+if ! command -v docker >/dev/null 2>&1; then
+  echo "Error: docker is required to deploy this application." >&2
+  exit 1
+fi
+
 echo "=== Deploying ${PROJECT_NAME} on port ${PORT_ARG} (host: ${HOST_ARG}) ==="
 cd "$SCRIPT_DIR"
 
@@ -67,10 +77,23 @@ function sendFile(filePath, res) {
 }
 
 const requestHandler = (req, res) => {
-  const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
-  const requestedPath = urlPath === '/' ? '/index.html' : urlPath;
-  const safePath = path.normalize(requestedPath).replace(/^([.][./\\])+/, '');
-  const filePath = path.join(ROOT, safePath);
+  let urlPath;
+  try {
+    urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
+  } catch {
+    res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Bad request');
+    return;
+  }
+
+  const requestedPath = urlPath === '/' ? 'index.html' : urlPath.replace(/^\/+/, '');
+  const filePath = path.resolve(ROOT, requestedPath);
+
+  if (filePath !== ROOT && !filePath.startsWith(`${ROOT}${path.sep}`)) {
+    res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Forbidden');
+    return;
+  }
 
   sendFile(filePath, res);
 };
@@ -99,12 +122,21 @@ if [ "${ENABLE_HTTPS:-1}" = "1" ]; then
   mkdir -p /app/tls
   if [ ! -s "${TLS_CERT_PATH:-/app/tls/cert.pem}" ] || [ ! -s "${TLS_KEY_PATH:-/app/tls/key.pem}" ]; then
     echo "Generating self-signed TLS certificate for host: ${TLS_HOST:-localhost}"
+    case "${TLS_HOST:-localhost}" in
+      ''|*[!0-9.]*)
+        TLS_SAN="DNS:${TLS_HOST:-localhost},DNS:localhost,IP:127.0.0.1"
+        ;;
+      *)
+        TLS_SAN="IP:${TLS_HOST:-localhost},DNS:localhost,IP:127.0.0.1"
+        ;;
+    esac
+
     openssl req -x509 -newkey rsa:2048 -nodes \
       -keyout "${TLS_KEY_PATH:-/app/tls/key.pem}" \
       -out "${TLS_CERT_PATH:-/app/tls/cert.pem}" \
       -sha256 -days 365 \
       -subj "/CN=${TLS_HOST:-localhost}" \
-      -addext "subjectAltName=DNS:${TLS_HOST:-localhost},IP:127.0.0.1"
+      -addext "subjectAltName=${TLS_SAN}"
   fi
 fi
 
@@ -144,9 +176,40 @@ docker run -d \
   --restart unless-stopped \
   "$IMAGE_NAME"
 
+echo "Checking container health..."
+HEALTHY=0
+for _ in $(seq 1 20); do
+  if docker exec "$CONTAINER_NAME" node -e "
+    const https = require('https');
+    const req = https.get({
+      hostname: '127.0.0.1',
+      port: process.env.PORT || '${PORT_ARG}',
+      path: '/',
+      rejectUnauthorized: false,
+      timeout: 1000
+    }, res => process.exit(res.statusCode === 200 ? 0 : 1));
+    req.on('error', () => process.exit(1));
+    req.on('timeout', () => req.destroy());
+  " >/dev/null 2>&1; then
+    HEALTHY=1
+    break
+  fi
+  sleep 0.5
+done
+
+if [ "$HEALTHY" -ne 1 ] || ! docker ps --filter "name=^/${CONTAINER_NAME}$" --filter "status=running" --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
+  echo "Error: deployment container failed to stay running." >&2
+  docker logs "$CONTAINER_NAME" >&2 || true
+  exit 1
+fi
+
 IP_ADDR=$(python3 -c "import socket; s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(('8.8.8.8', 80)); print(s.getsockname()[0]); s.close()" 2>/dev/null || echo "localhost")
+DISPLAY_HOST="$HOST_ARG"
+if [ "$DISPLAY_HOST" = "localhost" ] && [ "$IP_ADDR" != "localhost" ]; then
+  DISPLAY_HOST="$IP_ADDR"
+fi
 
 echo "========================================="
-echo "Deployed at https://${IP_ADDR}:${PORT_ARG}"
+echo "Deployed at https://${DISPLAY_HOST}:${PORT_ARG}"
 echo "Note: first load uses a self-signed certificate; trust/accept it in your browser."
 echo "========================================="
