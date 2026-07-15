@@ -27,7 +27,7 @@ No compile step is required.
 
 ### Container deploy
 
-`deploy.sh` builds a small container that serves the app from `index.html` and exposes a local `/api/tts` endpoint backed by `espeak-ng`, with optional Piper support when a Piper voice model is configured.
+`deploy.sh` builds a small container that serves the app from `index.html` and exposes a local `/api/tts` endpoint backed by `espeak-ng` and Piper. The image bundles a default local Piper voice so both local TTS choices work without a separate server.
 
 ```bash
 ./deploy.sh 3014
@@ -35,8 +35,8 @@ No compile step is required.
 
 - Arg 1: exposed port (default `3014`)
 - Open `http://localhost:<port>/` or `http://localhost:<port>/index.html`.
-- The bundled local TTS endpoint is available at `http://localhost:<port>/api/tts` and is used when **TTS: Local eSpeak** is selected in the app.
-- **TTS: Local Piper** uses the same endpoint with `engine=piper`. To enable it, install or mount the `piper` binary in the server container and set `PIPER_MODEL` to a Piper `.onnx` voice model path.
+- The bundled local TTS endpoint is available at `http://localhost:<port>/api/tts` and is used when **TTS: Local eSpeak** or **TTS: Local Piper** is selected in the app.
+- **TTS: Local Piper** uses the same endpoint with `engine=piper`. The container includes a default `en_US-lessac-medium` Piper voice; set `PIPER_MODEL` to a mounted Piper `.onnx` voice model path if you want to override it.
 
 ## Basic controls
 
@@ -45,7 +45,7 @@ No compile step is required.
 - **Language selector**: sets speech recognition language.
 - **AI Backend selector**: choose a local Ollama model, plus Gemini cloud when a Gemini API key is saved in **Settings**.
 - **Stream tokens**: optionally render AI responses token-by-token as they arrive. With **TTS: Local eSpeak** or **TTS: Local Piper**, speech is queued in small chunks as text streams in. Browser TTS still waits for the full response because browser speech synthesis does not accept incremental audio input.
-- **TTS selector**: choose browser speech synthesis, the deployed local eSpeak service, or a configured local Piper service. The eSpeak option requires running the app through `deploy.sh`; Piper also requires a server-side `piper` binary and `PIPER_MODEL`.
+- **TTS selector**: choose browser speech synthesis, the deployed local eSpeak service, or the deployed local Piper service. The local options require running the app through `deploy.sh`; the container bundles eSpeak and a default Piper voice.
 - **Settings (gear icon)**: save/update Gemini API key.
 - **Transcript panel**: shows conversation turns and current output.
 
