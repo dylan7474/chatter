@@ -137,6 +137,7 @@
                         <select id="ttsEngineSelect" class="bg-slate-900 border border-slate-700 text-white rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer">
                             <option value="browser">Browser</option>
                             <option value="espeak">Local eSpeak</option>
+                            <option value="piper">Local Piper</option>
                         </select>
                     </label>
                 </div>
@@ -599,10 +600,14 @@
             return ttsEngineSelect.value || 'browser';
         }
 
-        function getEspeakVoice() {
+        function getLocalTtsVoice() {
             const language = languageSelect.value.split('-')[0].toLowerCase();
             const voiceMap = { en: 'en-gb', es: 'es', fr: 'fr', de: 'de', zh: 'zh', ja: 'ja' };
             return voiceMap[language] || 'en-gb';
+        }
+
+        function isChunkedLocalTtsEngine() {
+            return ['espeak', 'piper'].includes(getSelectedTtsEngine());
         }
 
         function playNextTtsAudio() {
@@ -624,11 +629,12 @@
             audio.play().catch(() => audio.onerror());
         }
 
-        async function speakWithEspeak(text) {
+        async function speakWithLocalTts(text) {
             if (!text.trim()) return;
+            const engine = getSelectedTtsEngine();
             chunksSpeaking++;
             try {
-                const params = new URLSearchParams({ text, voice: getEspeakVoice() });
+                const params = new URLSearchParams({ text, engine, voice: getLocalTtsVoice() });
                 const response = await fetch(`/api/tts?${params.toString()}`);
                 if (!response.ok) throw new Error(`TTS service returned HTTP ${response.status}`);
                 const audioBlob = await response.blob();
@@ -636,8 +642,8 @@
                 playNextTtsAudio();
             } catch (error) {
                 chunksSpeaking--;
-                console.error('Local eSpeak TTS failed:', error);
-                showError('Local eSpeak TTS is unavailable. Use ./deploy.sh to run the bundled TTS service, or switch TTS back to Browser.');
+                console.error(`Local ${engine} TTS failed:`, error);
+                showError(`Local ${engine} TTS is unavailable. Use ./deploy.sh for eSpeak, configure Piper on the server, or switch TTS back to Browser.`);
                 speakWithBrowser(text);
             }
         }
@@ -675,15 +681,15 @@
                 return;
             }
 
-            if (getSelectedTtsEngine() === 'espeak') {
-                speakWithEspeak(text);
+            if (isChunkedLocalTtsEngine()) {
+                speakWithLocalTts(text);
             } else {
                 speakWithBrowser(text);
             }
         }
 
         function queueStreamingSpeechChunk(chunkText, flush = false) {
-            if (getSelectedTtsEngine() !== 'espeak') return;
+            if (!isChunkedLocalTtsEngine()) return;
             streamingSpeechBuffer += chunkText;
             const punctuationIndex = streamingSpeechBuffer.search(/[.!?;:](\s|$)/);
             if (!flush && punctuationIndex === -1 && streamingSpeechBuffer.length < 90) return;
@@ -691,7 +697,7 @@
             const splitIndex = punctuationIndex === -1 ? streamingSpeechBuffer.length : punctuationIndex + 1;
             const textToSpeak = streamingSpeechBuffer.slice(0, splitIndex).trim();
             streamingSpeechBuffer = flush ? '' : streamingSpeechBuffer.slice(splitIndex);
-            if (textToSpeak) speakWithEspeak(textToSpeak);
+            if (textToSpeak) speakWithLocalTts(textToSpeak);
         }
 
         function checkConversationResume() {
@@ -784,7 +790,7 @@
 
                     statusText.innerText = "AI Speaking...";
                     streamComplete = true;
-                    if (!shouldStreamTokens || getSelectedTtsEngine() !== 'espeak') speakFullResponse(aiResponse);
+                    if (!shouldStreamTokens || !isChunkedLocalTtsEngine()) speakFullResponse(aiResponse);
                     else checkConversationResume();
 
                 } else if (selectedModel.startsWith('ollama:')) {
@@ -815,7 +821,7 @@
                     chatHistory.push({ role: 'assistant', content: aiResponseText });
                     statusText.innerText = "AI Speaking...";
                     streamComplete = true;
-                    if (!shouldStreamTokens || getSelectedTtsEngine() !== 'espeak') speakFullResponse(aiResponseText);
+                    if (!shouldStreamTokens || !isChunkedLocalTtsEngine()) speakFullResponse(aiResponseText);
                     else checkConversationResume();
                 }
             } catch (error) {

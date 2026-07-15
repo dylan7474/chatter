@@ -41,6 +41,8 @@ const { spawn } = require('child_process');
 const port = Number(process.env.PORT || 3014);
 const indexHtml = fs.readFileSync('/app/index.html');
 const supportedVoices = new Set(['en-gb', 'en-us', 'es', 'fr', 'de', 'zh', 'ja']);
+const piperModel = process.env.PIPER_MODEL || '';
+const piperBinary = process.env.PIPER_BINARY || 'piper';
 
 function send(res, status, headers, body) {
   res.writeHead(status, headers);
@@ -52,10 +54,14 @@ http.createServer((req, res) => {
 
   if (url.pathname === '/api/tts') {
     const text = (url.searchParams.get('text') || '').slice(0, 1200).trim();
+    const engine = (url.searchParams.get('engine') || 'espeak').toLowerCase();
     const requestedVoice = (url.searchParams.get('voice') || 'en-gb').toLowerCase();
     const voice = supportedVoices.has(requestedVoice) ? requestedVoice : 'en-gb';
 
     if (!text) return send(res, 400, { 'Content-Type': 'text/plain' }, 'Missing text');
+    if (engine === 'piper' && !piperModel) {
+      return send(res, 503, { 'Content-Type': 'text/plain' }, 'PIPER_MODEL is not configured');
+    }
 
     res.writeHead(200, {
       'Content-Type': 'audio/wav',
@@ -63,14 +69,25 @@ http.createServer((req, res) => {
       'X-Content-Type-Options': 'nosniff'
     });
 
-    const espeak = spawn('espeak-ng', ['--stdout', '-v', voice, '-s', '165', text]);
-    espeak.stdout.pipe(res);
-    espeak.stderr.on('data', chunk => console.error(chunk.toString()));
-    espeak.on('error', error => {
+    const fail = error => {
       console.error(error);
       if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain' });
       res.end('TTS failed');
-    });
+    };
+
+    if (engine === 'piper') {
+      const piper = spawn(piperBinary, ['--model', piperModel, '--output_file', '-']);
+      piper.stdout.pipe(res);
+      piper.stderr.on('data', chunk => console.error(chunk.toString()));
+      piper.on('error', fail);
+      piper.stdin.end(text);
+      return;
+    }
+
+    const espeak = spawn('espeak-ng', ['--stdout', '-v', voice, '-s', '165', text]);
+    espeak.stdout.pipe(res);
+    espeak.stderr.on('data', chunk => console.error(chunk.toString()));
+    espeak.on('error', fail);
     return;
   }
 
@@ -111,5 +128,6 @@ echo "========================================="
 echo "Deployed ${PROJECT_NAME}."
 echo "URL: http://localhost:${PORT_ARG}/"
 echo "App file: http://localhost:${PORT_ARG}/index.html"
-echo "Local TTS: http://localhost:${PORT_ARG}/api/tts"
+echo "Local TTS: http://localhost:${PORT_ARG}/api/tts
+eSpeak is bundled. Piper is available when PIPER_MODEL points to a mounted Piper .onnx voice model."
 echo "========================================="
