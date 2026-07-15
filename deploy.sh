@@ -41,7 +41,7 @@ const { spawn } = require('child_process');
 const port = Number(process.env.PORT || 3014);
 const indexHtml = fs.readFileSync('/app/index.html');
 const supportedVoices = new Set(['en-gb', 'en-us', 'es', 'fr', 'de', 'zh', 'ja']);
-const piperModel = process.env.PIPER_MODEL || '';
+const piperModel = process.env.PIPER_MODEL || '/app/piper/en_US-lessac-medium.onnx';
 const piperBinary = process.env.PIPER_BINARY || 'piper';
 
 function send(res, status, headers, body) {
@@ -59,15 +59,11 @@ http.createServer((req, res) => {
     const voice = supportedVoices.has(requestedVoice) ? requestedVoice : 'en-gb';
 
     if (!text) return send(res, 400, { 'Content-Type': 'text/plain' }, 'Missing text');
-    if (engine === 'piper' && !piperModel) {
-      return send(res, 503, { 'Content-Type': 'text/plain' }, 'PIPER_MODEL is not configured');
-    }
-
-    res.writeHead(200, {
+    const audioHeaders = {
       'Content-Type': 'audio/wav',
       'Cache-Control': 'no-store',
       'X-Content-Type-Options': 'nosniff'
-    });
+    };
 
     const fail = error => {
       console.error(error);
@@ -76,14 +72,27 @@ http.createServer((req, res) => {
     };
 
     if (engine === 'piper') {
-      const piper = spawn(piperBinary, ['--model', piperModel, '--output_file', '-']);
-      piper.stdout.pipe(res);
+      if (!fs.existsSync(piperModel)) {
+        return send(res, 503, { 'Content-Type': 'text/plain' }, `Piper model was not found at ${piperModel}`);
+      }
+
+      const outputFile = `/tmp/piper-${Date.now()}-${Math.random().toString(16).slice(2)}.wav`;
+      const piper = spawn(piperBinary, ['--model', piperModel, '--output_file', outputFile]);
       piper.stderr.on('data', chunk => console.error(chunk.toString()));
       piper.on('error', fail);
+      piper.on('close', code => {
+        if (code !== 0) return fail(`Piper exited with status ${code}`);
+        res.writeHead(200, audioHeaders);
+        const wav = fs.createReadStream(outputFile);
+        wav.on('error', fail);
+        wav.on('close', () => fs.rm(outputFile, { force: true }, () => {}));
+        wav.pipe(res);
+      });
       piper.stdin.end(text);
       return;
     }
 
+    res.writeHead(200, audioHeaders);
     const espeak = spawn('espeak-ng', ['--stdout', '-v', voice, '-s', '165', text]);
     espeak.stdout.pipe(res);
     espeak.stderr.on('data', chunk => console.error(chunk.toString()));
@@ -102,8 +111,15 @@ http.createServer((req, res) => {
 NODE_EOF
 
 cat > "${BUILD_DIR}/Dockerfile" <<'DOCKER_EOF'
-FROM node:22-alpine
-RUN apk add --no-cache espeak-ng
+FROM node:22-bookworm-slim
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates curl espeak-ng python3-pip \
+  && pip3 install --break-system-packages --no-cache-dir piper-tts \
+  && mkdir -p /app/piper \
+  && curl -fsSL -o /app/piper/en_US-lessac-medium.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx \
+  && curl -fsSL -o /app/piper/en_US-lessac-medium.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY index.html server.js ./
 ENV PORT=3014
@@ -129,5 +145,5 @@ echo "Deployed ${PROJECT_NAME}."
 echo "URL: http://localhost:${PORT_ARG}/"
 echo "App file: http://localhost:${PORT_ARG}/index.html"
 echo "Local TTS: http://localhost:${PORT_ARG}/api/tts
-eSpeak is bundled. Piper is available when PIPER_MODEL points to a mounted Piper .onnx voice model."
+eSpeak and a default local Piper voice are bundled. Override PIPER_MODEL to use a mounted Piper .onnx voice model."
 echo "========================================="
