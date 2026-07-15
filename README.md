@@ -42,6 +42,7 @@ No compile step is required.
 - **End Session**: stops the active voice/chat session.
 - **Language selector**: sets speech recognition language.
 - **AI Backend selector**: choose a local Ollama model, plus Gemini cloud when a Gemini API key is saved in **Settings**.
+- **Stream tokens**: optionally render AI responses token-by-token as they arrive before the full response is read aloud.
 - **Settings (gear icon)**: save/update Gemini API key.
 - **Transcript panel**: shows conversation turns and current output.
 
@@ -56,5 +57,4 @@ No compile step is required.
 
 - Add keyboard accessibility shortcuts for all primary actions.
 - Add transcript export options (TXT/JSON).
-- Add optional streaming token-by-token response rendering.
 - Add basic automated checks (lint/format) and CI workflow.
