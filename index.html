@@ -127,6 +127,9 @@
                         <optgroup label="Local Ollama" id="ollamaGroup">
                             <option value="" disabled>Searching local...</option>
                         </optgroup>
+                        <optgroup label="Remote Ollama" id="remoteOllamaGroup">
+                            <option value="" disabled>Add remotes in Settings</option>
+                        </optgroup>
                     </select>
                     <label class="flex items-center gap-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
                         Gemini key:
@@ -175,7 +178,7 @@
 
     <!-- Settings Modal -->
     <div id="settingsModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
-        <div class="settings-modal border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl">
+        <div class="settings-modal border border-white/10 rounded-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl">
             <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
                 <i class="fa-solid fa-key text-indigo-400"></i> API Settings
             </h3>
@@ -201,6 +204,28 @@
                         <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="apiKeyInputSecondary">Gemini API Key 2</label>
                         <input type="password" id="apiKeyInputSecondary" placeholder="Paste key 2 here" class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
                     </div>
+                </div>
+                <div class="border border-slate-700/70 rounded-2xl p-4 bg-slate-900/30">
+                    <h4 class="text-sm font-bold text-white mb-2 flex items-center gap-2"><i class="fa-solid fa-server text-indigo-400"></i> Remote Ollama servers</h4>
+                    <p class="text-xs text-slate-500 mb-3">Add Ollama servers you can reach from this browser. Include the protocol and port, for example <code>http://192.168.1.20:11434</code>.</p>
+                    <div class="grid gap-2 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+                        <div>
+                            <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="remoteOllamaNameInput">Server name</label>
+                            <input type="text" id="remoteOllamaNameInput" placeholder="e.g. Office PC" class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="remoteOllamaUrlInput">Server address</label>
+                            <input type="url" id="remoteOllamaUrlInput" placeholder="http://192.168.1.20:11434" class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                        </div>
+                    </div>
+                    <div class="flex gap-2 mt-3">
+                        <button id="addRemoteOllama" type="button" class="flex-1 bg-indigo-600/80 hover:bg-indigo-600 text-white py-2 rounded-xl font-bold transition-colors">Add / Update</button>
+                        <button id="removeRemoteOllama" type="button" class="px-4 bg-slate-800 text-slate-400 rounded-xl font-bold">Remove</button>
+                    </div>
+                    <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 mt-3 block" for="remoteOllamaSelect">Saved servers</label>
+                    <select id="remoteOllamaSelect" class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                        <option value="">No remote servers saved</option>
+                    </select>
                 </div>
                 <div>
                     <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="promptInstructionsInput">Prompt behaviour / personality</label>
@@ -265,6 +290,7 @@
         const ttsEngineSelect = document.getElementById('ttsEngineSelect');
         const geminiCloudOption = document.getElementById('geminiCloudOption');
         const ollamaGroup = document.getElementById('ollamaGroup');
+        const remoteOllamaGroup = document.getElementById('remoteOllamaGroup');
         const transcriptArea = document.getElementById('transcriptArea');
         const statusIndicator = document.getElementById('statusIndicator');
         const statusDot = document.getElementById('statusDot');
@@ -276,6 +302,11 @@
         const textInputForm = document.getElementById('textInputForm');
         const textInput = document.getElementById('textInput');
         const sendTextBtn = document.getElementById('sendTextBtn');
+        const remoteOllamaNameInput = document.getElementById('remoteOllamaNameInput');
+        const remoteOllamaUrlInput = document.getElementById('remoteOllamaUrlInput');
+        const remoteOllamaSelect = document.getElementById('remoteOllamaSelect');
+        const addRemoteOllama = document.getElementById('addRemoteOllama');
+        const removeRemoteOllama = document.getElementById('removeRemoteOllama');
 
         const synth = window.speechSynthesis;
 
@@ -295,6 +326,7 @@
         let activeGeminiKeySlot = localStorage.getItem('voxscribe_gemini_key_active') || 'primary';
         if (!['primary', 'secondary'].includes(activeGeminiKeySlot)) activeGeminiKeySlot = 'primary';
         let savedPromptInstructions = localStorage.getItem('voxscribe_prompt_instructions') || "";
+        let savedRemoteOllamas = loadRemoteOllamas();
         apiKeyInputPrimary.value = savedApiKeys.primary;
         apiKeyInputSecondary.value = savedApiKeys.secondary;
         apiKeyNameInputPrimary.value = savedApiKeyNames.primary;
@@ -337,6 +369,66 @@
             updateGeminiOptionVisibility();
         });
 
+
+        function loadRemoteOllamas() {
+            try {
+                const remotes = JSON.parse(localStorage.getItem('voxscribe_remote_ollamas') || '[]');
+                return Array.isArray(remotes) ? remotes.filter(remote => remote.id && remote.name && remote.url) : [];
+            } catch (error) {
+                return [];
+            }
+        }
+
+        function saveRemoteOllamas() {
+            localStorage.setItem('voxscribe_remote_ollamas', JSON.stringify(savedRemoteOllamas));
+        }
+
+        function normalizeOllamaUrl(url) {
+            const parsedUrl = new URL(url.trim());
+            parsedUrl.hash = '';
+            parsedUrl.search = '';
+            return parsedUrl.toString().replace(/\/$/, '');
+        }
+
+        function renderRemoteOllamaSelect() {
+            remoteOllamaSelect.innerHTML = '';
+            if (!savedRemoteOllamas.length) {
+                remoteOllamaSelect.innerHTML = '<option value="">No remote servers saved</option>';
+                remoteOllamaNameInput.value = '';
+                remoteOllamaUrlInput.value = '';
+                return;
+            }
+
+            savedRemoteOllamas.forEach(remote => {
+                const option = document.createElement('option');
+                option.value = remote.id;
+                option.textContent = `${remote.name} (${remote.url})`;
+                remoteOllamaSelect.appendChild(option);
+            });
+            populateSelectedRemoteOllama();
+        }
+
+        function populateSelectedRemoteOllama() {
+            const selectedRemote = savedRemoteOllamas.find(remote => remote.id === remoteOllamaSelect.value);
+            remoteOllamaNameInput.value = selectedRemote?.name || '';
+            remoteOllamaUrlInput.value = selectedRemote?.url || '';
+        }
+
+        function getOllamaEndpointForSelection(selection) {
+            if (selection.startsWith('ollama-remote:')) {
+                const [, remoteId] = selection.split(':');
+                return savedRemoteOllamas.find(remote => remote.id === remoteId)?.url || null;
+            }
+            return 'http://127.0.0.1:11434';
+        }
+
+        function getOllamaModelNameForSelection(selection) {
+            if (selection.startsWith('ollama-remote:')) {
+                return selection.split(':').slice(2).join(':');
+            }
+            return selection.replace('ollama:', '');
+        }
+
         function getActiveGeminiKey() {
             return savedApiKeys[activeGeminiKeySlot] || "";
         }
@@ -368,7 +460,7 @@
             }
 
             if (!hasAnyApiKey && aiModelSelect.value === 'gemini') {
-                const firstOllamaModel = ollamaGroup.querySelector('option[value^="ollama:"]');
+                const firstOllamaModel = aiModelSelect.querySelector('option[value^="ollama:"], option[value^="ollama-remote:"]');
                 if (firstOllamaModel) {
                     aiModelSelect.value = firstOllamaModel.value;
                     localStorage.setItem('voxscribe_ai_model', aiModelSelect.value);
@@ -378,37 +470,65 @@
             }
         }
 
-        async function fetchOllamaModels() {
+        async function populateOllamaGroup(group, endpoint, options = {}) {
+            const { valuePrefix = 'ollama:', emptyText = 'No models found', errorText = 'Ollama unreachable', labelPrefix = '', append = false } = options;
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 2000);
-                const response = await fetch('http://127.0.0.1:11434/api/tags', { signal: controller.signal });
+                const timeoutId = setTimeout(() => controller.abort(), 2500);
+                const response = await fetch(`${endpoint}/api/tags`, { signal: controller.signal });
                 clearTimeout(timeoutId);
                 if (!response.ok) throw new Error();
                 const data = await response.json();
-                
-                ollamaGroup.innerHTML = '';
+
+                if (!append) group.innerHTML = '';
                 if (data.models && data.models.length > 0) {
                     data.models.forEach(model => {
                         const option = document.createElement('option');
-                        option.value = 'ollama:' + model.name;
-                        option.textContent = model.name;
-                        ollamaGroup.appendChild(option);
+                        option.value = valuePrefix + model.name;
+                        option.textContent = labelPrefix ? `${labelPrefix}: ${model.name}` : model.name;
+                        group.appendChild(option);
                     });
-                    
-                    const savedModel = localStorage.getItem('voxscribe_ai_model');
-                    if (savedModel && savedModel.startsWith('ollama:')) {
-                        const exists = data.models.some(m => 'ollama:' + m.name === savedModel);
-                        if (exists) aiModelSelect.value = savedModel;
-                    }
                 } else {
-                    ollamaGroup.innerHTML = '<option value="" disabled>No models found</option>';
+                    if (!append) group.innerHTML = `<option value="" disabled>${emptyText}</option>`;
                 }
             } catch (error) {
-                ollamaGroup.innerHTML = '<option value="" disabled>Local Ollama unreachable</option>';
+                const option = document.createElement('option');
+                option.value = '';
+                option.disabled = true;
+                option.textContent = errorText;
+                if (!append) group.innerHTML = '';
+                group.appendChild(option);
+            }
+        }
+
+        async function fetchOllamaModels() {
+            await populateOllamaGroup(ollamaGroup, 'http://127.0.0.1:11434', { errorText: 'Local Ollama unreachable' });
+
+            remoteOllamaGroup.innerHTML = '';
+            if (!savedRemoteOllamas.length) {
+                remoteOllamaGroup.innerHTML = '<option value="" disabled>Add remotes in Settings</option>';
+            } else {
+                for (const remote of savedRemoteOllamas) {
+                    await populateOllamaGroup(remoteOllamaGroup, remote.url, {
+                        valuePrefix: `ollama-remote:${remote.id}:`,
+                        emptyText: `${remote.name}: no remote models found`,
+                        errorText: `${remote.name} unreachable`,
+                        labelPrefix: remote.name,
+                        append: true
+                    });
+                }
+                if (!remoteOllamaGroup.children.length) {
+                    remoteOllamaGroup.innerHTML = '<option value="" disabled>No remote models found</option>';
+                }
+            }
+
+            const savedModel = localStorage.getItem('voxscribe_ai_model');
+            if (savedModel && aiModelSelect.querySelector(`option[value="${CSS.escape(savedModel)}"]`)) {
+                aiModelSelect.value = savedModel;
             }
             updateGeminiOptionVisibility();
         }
+        renderRemoteOllamaSelect();
         fetchOllamaModels();
         updateGeminiOptionVisibility();
 
@@ -920,14 +1040,16 @@
                     if (!shouldStreamTokens || !isChunkedLocalTtsEngine()) speakFullResponse(aiResponse);
                     else checkConversationResume();
 
-                } else if (selectedModel.startsWith('ollama:')) {
-                    const ollamaModelName = selectedModel.replace('ollama:', '');
+                } else if (selectedModel.startsWith('ollama:') || selectedModel.startsWith('ollama-remote:')) {
+                    const ollamaEndpoint = getOllamaEndpointForSelection(selectedModel);
+                    if (!ollamaEndpoint) throw new Error('Selected remote Ollama server was not found. Check Settings.');
+                    const ollamaModelName = getOllamaModelNameForSelection(selectedModel);
                     const requestBody = { model: ollamaModelName, messages: [{ role: 'system', content: systemPrompt }, ...chatHistory], stream: shouldStreamTokens };
                     let aiResponseText;
 
                     if (shouldStreamTokens) {
                         const msgDiv = createAssistantMessageElement();
-                        const response = await fetchWithRetry('http://127.0.0.1:11434/api/chat', {
+                        const response = await fetchWithRetry(`${ollamaEndpoint}/api/chat`, {
                             method: 'POST',
                             headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
                             body: JSON.stringify(requestBody)
@@ -935,7 +1057,7 @@
                         aiResponseText = await readOllamaStreamingResponse(response, msgDiv, queueStreamingSpeechChunk) || "No response.";
                         queueStreamingSpeechChunk('', true);
                     } else {
-                        const response = await fetchWithRetry('http://127.0.0.1:11434/api/chat', {
+                        const response = await fetchWithRetry(`${ollamaEndpoint}/api/chat`, {
                             method: 'POST',
                             headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
                             body: JSON.stringify(requestBody)
@@ -1041,6 +1163,46 @@
             handleUserMessage(text);
         });
         
+        remoteOllamaSelect.addEventListener('change', populateSelectedRemoteOllama);
+        addRemoteOllama.addEventListener('click', async () => {
+            const name = remoteOllamaNameInput.value.trim();
+            if (!name) { showError('Give the remote Ollama server a name.'); return; }
+
+            let url;
+            try {
+                url = normalizeOllamaUrl(remoteOllamaUrlInput.value);
+            } catch (error) {
+                showError('Enter a valid remote Ollama address, including http:// or https://.');
+                return;
+            }
+
+            const existingId = remoteOllamaSelect.value || `remote-${Date.now()}`;
+            const existingIndex = savedRemoteOllamas.findIndex(remote => remote.id === existingId);
+            const remote = { id: existingId, name, url };
+            if (existingIndex >= 0) savedRemoteOllamas[existingIndex] = remote;
+            else savedRemoteOllamas.push(remote);
+
+            saveRemoteOllamas();
+            renderRemoteOllamaSelect();
+            remoteOllamaSelect.value = remote.id;
+            populateSelectedRemoteOllama();
+            await fetchOllamaModels();
+            toastMsg.innerText = 'Remote Ollama Saved';
+            toast.style.opacity = '1';
+            setTimeout(() => toast.style.opacity = '0', 2000);
+        });
+        removeRemoteOllama.addEventListener('click', async () => {
+            const selectedId = remoteOllamaSelect.value;
+            if (!selectedId) return;
+            savedRemoteOllamas = savedRemoteOllamas.filter(remote => remote.id !== selectedId);
+            saveRemoteOllamas();
+            if (aiModelSelect.value.startsWith(`ollama-remote:${selectedId}:`)) {
+                localStorage.removeItem('voxscribe_ai_model');
+            }
+            renderRemoteOllamaSelect();
+            await fetchOllamaModels();
+        });
+
         openSettings.addEventListener('click', () => settingsModal.classList.remove('hidden'));
         closeSettings.addEventListener('click', () => settingsModal.classList.add('hidden'));
         saveSettings.addEventListener('click', () => {
