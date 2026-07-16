@@ -181,8 +181,8 @@
                 </div>
                 <div>
                     <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="promptInstructionsInput">Prompt behaviour / personality</label>
-                    <textarea id="promptInstructionsInput" rows="5" placeholder="Leave blank to use the default friendly British chat style." class="w-full resize-y bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all custom-scrollbar"></textarea>
-                    <p class="text-xs text-slate-500 mt-2">When saved, this replaces the default assistant personality instructions.</p>
+                    <textarea id="promptInstructionsInput" rows="5" placeholder="Default friendly British chat style." class="w-full resize-y bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all custom-scrollbar"></textarea>
+                    <p class="text-xs text-slate-500 mt-2">Edit the default instructions here, or clear the field and save to restore the default.</p>
                 </div>
                 <div class="flex gap-3 mt-8">
                     <button id="saveSettings" class="flex-1 premium-btn text-white py-3 rounded-xl font-bold">Save Changes</button>
@@ -259,7 +259,7 @@
         let savedApiKey = localStorage.getItem('voxscribe_gemini_key') || "";
         let savedPromptInstructions = localStorage.getItem('voxscribe_prompt_instructions') || "";
         apiKeyInput.value = savedApiKey;
-        promptInstructionsInput.value = savedPromptInstructions;
+        promptInstructionsInput.value = savedPromptInstructions || defaultSystemPrompt;
 
         const savedLang = localStorage.getItem('voxscribe_language');
         if (savedLang) languageSelect.value = savedLang;
@@ -972,14 +972,15 @@
         closeSettings.addEventListener('click', () => settingsModal.classList.add('hidden'));
         saveSettings.addEventListener('click', () => {
             savedApiKey = apiKeyInput.value.trim();
-            savedPromptInstructions = promptInstructionsInput.value.trim();
+            const promptInstructions = promptInstructionsInput.value.trim();
+            savedPromptInstructions = promptInstructions === defaultSystemPrompt ? "" : promptInstructions;
             localStorage.setItem('voxscribe_gemini_key', savedApiKey);
             if (savedPromptInstructions) {
                 localStorage.setItem('voxscribe_prompt_instructions', savedPromptInstructions);
             } else {
                 localStorage.removeItem('voxscribe_prompt_instructions');
             }
-            promptInstructionsInput.value = savedPromptInstructions;
+            promptInstructionsInput.value = savedPromptInstructions || defaultSystemPrompt;
             updateGeminiOptionVisibility();
             settingsModal.classList.add('hidden');
             toastMsg.innerText = "Settings Saved";
