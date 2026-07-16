@@ -870,6 +870,22 @@
             }
         }
 
+        function findPreferredBrowserVoice(voices, targetLang) {
+            const normalizedTarget = targetLang.toLowerCase();
+            const targetLanguage = normalizedTarget.split('-')[0];
+
+            if (targetLanguage === 'en') {
+                return voices.find(voice => voice.lang.toLowerCase() === 'en-gb')
+                    || voices.find(voice => voice.lang.toLowerCase().startsWith('en-gb'))
+                    || voices.find(voice => /british|\buk\b|great britain/i.test(`${voice.name} ${voice.lang}`))
+                    || voices.find(voice => voice.lang.toLowerCase() === normalizedTarget)
+                    || voices.find(voice => voice.lang.toLowerCase().startsWith('en'));
+            }
+
+            return voices.find(voice => voice.lang.toLowerCase() === normalizedTarget)
+                || voices.find(voice => voice.lang.toLowerCase().startsWith(targetLanguage));
+        }
+
         function speakWithBrowser(text) {
             if (!text.trim()) return;
             chunksSpeaking++;
@@ -878,11 +894,12 @@
             utterance.lang = targetLang;
 
             const voices = synth.getVoices();
-            const preferredVoice = voices.find(v => v.lang === targetLang)
-                || voices.find(v => v.lang.startsWith(targetLang.split('-')[0]))
-                || voices[0];
+            const preferredVoice = findPreferredBrowserVoice(voices, targetLang) || voices[0];
 
-            if (preferredVoice) utterance.voice = preferredVoice;
+            if (preferredVoice) {
+                utterance.voice = preferredVoice;
+                utterance.lang = preferredVoice.lang;
+            }
             utterance.rate = 1.05;
 
             window.speechUtterances.push(utterance);
