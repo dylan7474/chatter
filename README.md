@@ -27,7 +27,7 @@ No compile step is required.
 
 ### Container deploy
 
-`deploy.sh` builds a small container that serves the app from `index.html` and exposes a local `/api/tts` endpoint backed by `espeak-ng` and Piper. The image bundles a default local Piper voice so both local TTS choices work without a separate server.
+`deploy.sh` builds a small container that serves the app from `index.html` and exposes a local `/api/tts` endpoint backed by `espeak-ng` and Piper. The image bundles a default UK English local Piper voice so both local TTS choices work without a separate server.
 
 ```bash
 ./deploy.sh 3014
@@ -36,7 +36,7 @@ No compile step is required.
 - Arg 1: exposed port (default `3014`)
 - Open `http://localhost:<port>/` or `http://localhost:<port>/index.html`.
 - The bundled local TTS endpoint is available at `http://localhost:<port>/api/tts` and is used when **TTS: Local eSpeak**, **TTS: Local Piper**, or **TTS: Local Kokoro-82M** is selected in the app.
-- **TTS: Local Piper** uses the same endpoint with `engine=piper`. The container includes a default `en_US-lessac-low` Piper voice; set `PIPER_MODEL` to a mounted Piper `.onnx` voice model path if you want to override it.
+- **TTS: Local Piper** uses the same endpoint with `engine=piper`. The container includes a default `en_GB-southern_english_female-low` Piper voice; set `PIPER_MODEL` to a mounted Piper `.onnx` voice model path if you want to override it.
 - **TTS: Local Kokoro-82M** uses the same endpoint with `engine=kokoro`. The container downloads Kokoro ONNX model files during build; set `KOKORO_MODEL`, `KOKORO_VOICES`, or `KOKORO_VOICE` to use mounted Kokoro files or a different voice.
 - Local Piper and Kokoro responses are synthesized with in-memory request de-duplication and an LRU audio cache (default `TTS_CACHE_ENTRIES=128`) so repeated chunks return immediately and concurrent identical requests share one synthesis job.
 
@@ -48,7 +48,7 @@ No compile step is required.
 - **AI Backend selector**: choose a local Ollama model, a saved remote Ollama model, plus Gemini cloud when at least one Gemini API key is saved in **Settings**.
 - **Gemini key selector**: choose which saved Gemini API key Gemini cloud requests use. Saved keys can be named in **Settings** (for example, “Billing” or “Free”); if the selected slot is empty, the app falls back to the other saved key.
 - **Stream tokens**: optionally render AI responses token-by-token as they arrive. With **TTS: Local eSpeak**, **TTS: Local Piper**, or **TTS: Local Kokoro-82M**, speech is queued in sentence or short phrase chunks as text streams in, so playback can start before the AI response is complete. Browser TTS still waits for the full response because browser speech synthesis does not accept incremental audio input.
-- **TTS selector**: choose browser speech synthesis, the deployed local eSpeak service, the deployed local Piper service, or the deployed local Kokoro-82M service. The local options require running the app through `deploy.sh`; the container bundles eSpeak, a default Piper voice, and Kokoro-82M model files.
+- **TTS selector**: choose browser speech synthesis, the deployed local eSpeak service, the deployed local Piper service, or the deployed local Kokoro-82M service. The local options require running the app through `deploy.sh`; the container bundles eSpeak, a default UK English Piper voice, and Kokoro-82M model files.
 - **Settings (gear icon)**: name and save/update two Gemini API key slots, choose the active Gemini key, add/update/remove named remote Ollama servers, and set optional prompt behaviour/personality instructions. Saved prompt instructions override the default friendly British chat style; leave the field blank to use the default. Remote Ollama addresses must include the protocol and port, such as `http://192.168.1.20:11434`.
 - **Transcript panel**: shows conversation turns and current output.
 - **Text input box**: type a message and press **Send** (or Enter) as an alternative to speaking; use Shift+Enter for a new line.

@@ -42,11 +42,11 @@ const crypto = require('crypto');
 const port = Number(process.env.PORT || 3014);
 const indexHtml = fs.readFileSync('/app/index.html');
 const supportedVoices = new Set(['en-gb', 'en-us', 'es', 'fr', 'de', 'zh', 'ja']);
-const piperModel = process.env.PIPER_MODEL || '/app/piper/en_US-lessac-low.onnx';
+const piperModel = process.env.PIPER_MODEL || '/app/piper/en_GB-southern_english_female-low.onnx';
 const piperBinary = process.env.PIPER_BINARY || 'piper';
 const kokoroModel = process.env.KOKORO_MODEL || '/app/kokoro/kokoro-v1.0.onnx';
 const kokoroVoices = process.env.KOKORO_VOICES || '/app/kokoro/voices-v1.0.bin';
-const kokoroVoice = process.env.KOKORO_VOICE || 'af_heart';
+const kokoroVoice = process.env.KOKORO_VOICE || 'bf_emma';
 const tmpDir = fs.existsSync('/dev/shm') ? '/dev/shm' : '/tmp';
 const ttsCache = new Map();
 const inFlightTts = new Map();
@@ -166,7 +166,7 @@ import soundfile as sf
 model, voices, output_file, voice = sys.argv[1:5]
 text = sys.stdin.read().strip()
 kokoro = Kokoro(model, voices)
-samples, sample_rate = kokoro.create(text, voice=voice, speed=1.0, lang='en-us')
+samples, sample_rate = kokoro.create(text, voice=voice, speed=1.0, lang='en-gb')
 sf.write(output_file, samples, sample_rate)
 `;
       synthesizeCached(key, () => synthesizeWithProcess('python3', ['-c', kokoroScript, kokoroModel, kokoroVoices, outputFile, kokoroVoice], text, outputFile, { stdio: ['pipe', 'ignore', 'pipe'] }))
@@ -199,8 +199,8 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl espeak-ng python3-pip \
   && pip3 install --break-system-packages --no-cache-dir piper-tts kokoro-onnx soundfile \
   && mkdir -p /app/piper /app/kokoro \
-  && curl -fsSL -o /app/piper/en_US-lessac-low.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/low/en_US-lessac-low.onnx \
-  && curl -fsSL -o /app/piper/en_US-lessac-low.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/low/en_US-lessac-low.onnx.json \
+  && curl -fsSL -o /app/piper/en_GB-southern_english_female-low.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/southern_english_female/low/en_GB-southern_english_female-low.onnx \
+  && curl -fsSL -o /app/piper/en_GB-southern_english_female-low.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/southern_english_female/low/en_GB-southern_english_female-low.onnx.json \
   && curl -fsSL -o /app/kokoro/kokoro-v1.0.onnx https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx \
   && curl -fsSL -o /app/kokoro/voices-v1.0.bin https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin \
   && apt-get clean \
@@ -230,5 +230,5 @@ echo "Deployed ${PROJECT_NAME}."
 echo "URL: http://localhost:${PORT_ARG}/"
 echo "App file: http://localhost:${PORT_ARG}/index.html"
 echo "Local TTS: http://localhost:${PORT_ARG}/api/tts
-eSpeak, a default local Piper voice, and Kokoro-82M are bundled. Override PIPER_MODEL to use a mounted Piper .onnx voice model, or KOKORO_MODEL/KOKORO_VOICES/KOKORO_VOICE for Kokoro."
+eSpeak, a default UK English local Piper voice, and Kokoro-82M are bundled. Override PIPER_MODEL to use a mounted Piper .onnx voice model, or KOKORO_MODEL/KOKORO_VOICES/KOKORO_VOICE for Kokoro."
 echo "========================================="
