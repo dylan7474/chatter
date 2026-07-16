@@ -41,7 +41,7 @@ const { spawn } = require('child_process');
 const port = Number(process.env.PORT || 3014);
 const indexHtml = fs.readFileSync('/app/index.html');
 const supportedVoices = new Set(['en-gb', 'en-us', 'es', 'fr', 'de', 'zh', 'ja']);
-const piperModel = process.env.PIPER_MODEL || '/app/piper/en_US-lessac-medium.onnx';
+const piperModel = process.env.PIPER_MODEL || '/app/piper/en_US-lessac-low.onnx';
 const piperBinary = process.env.PIPER_BINARY || 'piper';
 const kokoroModel = process.env.KOKORO_MODEL || '/app/kokoro/kokoro-v1.0.onnx';
 const kokoroVoices = process.env.KOKORO_VOICES || '/app/kokoro/voices-v1.0.bin';
@@ -149,8 +149,8 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl espeak-ng python3-pip \
   && pip3 install --break-system-packages --no-cache-dir piper-tts kokoro-onnx soundfile \
   && mkdir -p /app/piper /app/kokoro \
-  && curl -fsSL -o /app/piper/en_US-lessac-medium.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx \
-  && curl -fsSL -o /app/piper/en_US-lessac-medium.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json \
+  && curl -fsSL -o /app/piper/en_US-lessac-low.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/low/en_US-lessac-low.onnx \
+  && curl -fsSL -o /app/piper/en_US-lessac-low.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/low/en_US-lessac-low.onnx.json \
   && curl -fsSL -o /app/kokoro/kokoro-v1.0.onnx https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx \
   && curl -fsSL -o /app/kokoro/voices-v1.0.bin https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin \
   && apt-get clean \

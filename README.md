@@ -36,7 +36,7 @@ No compile step is required.
 - Arg 1: exposed port (default `3014`)
 - Open `http://localhost:<port>/` or `http://localhost:<port>/index.html`.
 - The bundled local TTS endpoint is available at `http://localhost:<port>/api/tts` and is used when **TTS: Local eSpeak**, **TTS: Local Piper**, or **TTS: Local Kokoro-82M** is selected in the app.
-- **TTS: Local Piper** uses the same endpoint with `engine=piper`. The container includes a default `en_US-lessac-medium` Piper voice; set `PIPER_MODEL` to a mounted Piper `.onnx` voice model path if you want to override it.
+- **TTS: Local Piper** uses the same endpoint with `engine=piper`. The container includes a default `en_US-lessac-low` Piper voice; set `PIPER_MODEL` to a mounted Piper `.onnx` voice model path if you want to override it.
 - **TTS: Local Kokoro-82M** uses the same endpoint with `engine=kokoro`. The container downloads Kokoro ONNX model files during build; set `KOKORO_MODEL`, `KOKORO_VOICES`, or `KOKORO_VOICE` to use mounted Kokoro files or a different voice.
 
 ## Basic controls
