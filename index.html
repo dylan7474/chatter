@@ -123,7 +123,7 @@
                 <div class="flex flex-wrap items-center gap-3 bg-slate-800/50 p-2 rounded-xl border border-white/5">
                     <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider hidden sm:block">AI Backend:</span>
                     <select id="aiModelSelect" class="bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer min-w-[150px]">
-                        <option id="geminiCloudOption" value="gemini">Gemini 2.5 (Cloud)</option>
+                        <option id="geminiCloudOption" value="gemini">Gemini 3.5 Flash (Cloud)</option>
                         <optgroup label="Local Ollama" id="ollamaGroup">
                             <option value="" disabled>Searching local...</option>
                         </optgroup>
@@ -181,8 +181,8 @@
                 </div>
                 <div>
                     <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="promptInstructionsInput">Prompt behaviour / personality</label>
-                    <textarea id="promptInstructionsInput" rows="5" placeholder="Leave blank to use the default friendly British chat style." class="w-full resize-y bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all custom-scrollbar"></textarea>
-                    <p class="text-xs text-slate-500 mt-2">When saved, this replaces the default assistant personality instructions.</p>
+                    <textarea id="promptInstructionsInput" rows="5" placeholder="Default friendly British chat style." class="w-full resize-y bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all custom-scrollbar"></textarea>
+                    <p class="text-xs text-slate-500 mt-2">Edit the default instructions here, or clear the field and save to restore the default.</p>
                 </div>
                 <div class="flex gap-3 mt-8">
                     <button id="saveSettings" class="flex-1 premium-btn text-white py-3 rounded-xl font-bold">Save Changes</button>
@@ -253,11 +253,13 @@
         const synth = window.speechSynthesis;
 
         // --- PERSISTENCE LOGIC ---
+        const GEMINI_MODEL = 'gemini-3.5-flash';
+
         const defaultSystemPrompt = "You are a friendly, natural British person having a casual spoken conversation. Keep your responses extremely brief (usually one sentence, max two). Speak casually and warmly. Avoid formal AI language, lists, or markdown. Just act like a mate chatting over tea.";
         let savedApiKey = localStorage.getItem('voxscribe_gemini_key') || "";
         let savedPromptInstructions = localStorage.getItem('voxscribe_prompt_instructions') || "";
         apiKeyInput.value = savedApiKey;
-        promptInstructionsInput.value = savedPromptInstructions;
+        promptInstructionsInput.value = savedPromptInstructions || defaultSystemPrompt;
 
         const savedLang = localStorage.getItem('voxscribe_language');
         if (savedLang) languageSelect.value = savedLang;
@@ -809,7 +811,7 @@
                     if (!savedApiKey) throw new Error("Missing Gemini API Key. Check Settings.");
                     const geminiEndpoint = shouldStreamTokens ? 'streamGenerateContent?alt=sse' : 'generateContent';
                     const separator = shouldStreamTokens ? '&' : '?';
-                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:${geminiEndpoint}${separator}key=${savedApiKey}`;
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:${geminiEndpoint}${separator}key=${savedApiKey}`;
                     const geminiContents = chatHistory.map(msg => ({
                         role: msg.role === 'assistant' ? 'model' : 'user',
                         parts: [{ text: msg.content }]
@@ -970,14 +972,15 @@
         closeSettings.addEventListener('click', () => settingsModal.classList.add('hidden'));
         saveSettings.addEventListener('click', () => {
             savedApiKey = apiKeyInput.value.trim();
-            savedPromptInstructions = promptInstructionsInput.value.trim();
+            const promptInstructions = promptInstructionsInput.value.trim();
+            savedPromptInstructions = promptInstructions === defaultSystemPrompt ? "" : promptInstructions;
             localStorage.setItem('voxscribe_gemini_key', savedApiKey);
             if (savedPromptInstructions) {
                 localStorage.setItem('voxscribe_prompt_instructions', savedPromptInstructions);
             } else {
                 localStorage.removeItem('voxscribe_prompt_instructions');
             }
-            promptInstructionsInput.value = savedPromptInstructions;
+            promptInstructionsInput.value = savedPromptInstructions || defaultSystemPrompt;
             updateGeminiOptionVisibility();
             settingsModal.classList.add('hidden');
             toastMsg.innerText = "Settings Saved";
