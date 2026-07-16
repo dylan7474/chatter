@@ -47,7 +47,7 @@ No compile step is required.
 - **AI Backend selector**: choose a local Ollama model, plus Gemini 3.5 Flash cloud when a Gemini API key is saved in **Settings**.
 - **Stream tokens**: optionally render AI responses token-by-token as they arrive. With **TTS: Local eSpeak**, **TTS: Local Piper**, or **TTS: Local Kokoro-82M**, speech is queued in sentence or short phrase chunks as text streams in, so playback can start before the AI response is complete. Browser TTS still waits for the full response because browser speech synthesis does not accept incremental audio input.
 - **TTS selector**: choose browser speech synthesis, the deployed local eSpeak service, the deployed local Piper service, or the deployed local Kokoro-82M service. The local options require running the app through `deploy.sh`; the container bundles eSpeak, a default Piper voice, and Kokoro-82M model files.
-- **Settings (gear icon)**: save/update Gemini API key and optional prompt behaviour/personality instructions. Saved prompt instructions override the default friendly British chat style; leave the field blank to use the default.
+- **Settings (gear icon)**: save/update Gemini API key and prompt behaviour/personality instructions. The prompt field is preloaded with the default friendly British chat style so you can make small edits; clear the field and save to restore the default.
 - **Transcript panel**: shows conversation turns and current output.
 - **Text input box**: type a message and press **Send** (or Enter) as an alternative to speaking; use Shift+Enter for a new line.
 
