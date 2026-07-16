@@ -8,7 +8,7 @@ It captures speech from your microphone, sends conversation context to an AI bac
 - **Frontend-only web app** built as a single `index.html` file.
 - **Speech-driven chat experience** using browser speech recognition + speech synthesis.
 - **Hybrid AI backend support** for:
-  - **Gemini (cloud)** via an API key.
+  - **Gemini 3.5 Flash (cloud)** via an API key.
   - **Local Ollama models** discovered from your local machine.
 
 ## Build / run instructions
@@ -44,7 +44,7 @@ No compile step is required.
 - **Start Conversation**: begins microphone capture and starts a voice session.
 - **End Session**: stops the active voice/chat session.
 - **Language selector**: sets speech recognition language.
-- **AI Backend selector**: choose a local Ollama model, plus Gemini cloud when a Gemini API key is saved in **Settings**.
+- **AI Backend selector**: choose a local Ollama model, plus Gemini 3.5 Flash cloud when a Gemini API key is saved in **Settings**.
 - **Stream tokens**: optionally render AI responses token-by-token as they arrive. With **TTS: Local eSpeak**, **TTS: Local Piper**, or **TTS: Local Kokoro-82M**, speech is queued in sentence or short phrase chunks as text streams in, so playback can start before the AI response is complete. Browser TTS still waits for the full response because browser speech synthesis does not accept incremental audio input.
 - **TTS selector**: choose browser speech synthesis, the deployed local eSpeak service, the deployed local Piper service, or the deployed local Kokoro-82M service. The local options require running the app through `deploy.sh`; the container bundles eSpeak, a default Piper voice, and Kokoro-82M model files.
 - **Settings (gear icon)**: save/update Gemini API key and optional prompt behaviour/personality instructions. Saved prompt instructions override the default friendly British chat style; leave the field blank to use the default.
