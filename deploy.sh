@@ -37,6 +37,7 @@ cat > "${BUILD_DIR}/server.js" <<'NODE_EOF'
 const http = require('http');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const crypto = require('crypto');
 
 const port = Number(process.env.PORT || 3014);
 const indexHtml = fs.readFileSync('/app/index.html');
@@ -46,6 +47,71 @@ const piperBinary = process.env.PIPER_BINARY || 'piper';
 const kokoroModel = process.env.KOKORO_MODEL || '/app/kokoro/kokoro-v1.0.onnx';
 const kokoroVoices = process.env.KOKORO_VOICES || '/app/kokoro/voices-v1.0.bin';
 const kokoroVoice = process.env.KOKORO_VOICE || 'af_heart';
+const tmpDir = fs.existsSync('/dev/shm') ? '/dev/shm' : '/tmp';
+const ttsCache = new Map();
+const inFlightTts = new Map();
+const maxCacheEntries = Number(process.env.TTS_CACHE_ENTRIES || 128);
+
+function cacheKey(engine, voice, text) {
+  return crypto.createHash('sha256').update(`${engine}\0${voice}\0${text}`).digest('hex');
+}
+
+function getCachedAudio(key) {
+  const cached = ttsCache.get(key);
+  if (!cached) return null;
+  ttsCache.delete(key);
+  ttsCache.set(key, cached);
+  return cached;
+}
+
+function setCachedAudio(key, audio) {
+  ttsCache.set(key, audio);
+  while (ttsCache.size > maxCacheEntries) {
+    const oldestKey = ttsCache.keys().next().value;
+    ttsCache.delete(oldestKey);
+  }
+}
+
+function synthesizeWithProcess(command, args, text, outputFile, options = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      ...options,
+      env: {
+        ...process.env,
+        OMP_NUM_THREADS: process.env.OMP_NUM_THREADS || '1',
+        ORT_NUM_THREADS: process.env.ORT_NUM_THREADS || '1',
+        ...options.env
+      }
+    });
+    let stderr = '';
+    child.stderr?.on('data', chunk => {
+      stderr += chunk.toString();
+      if (stderr.length > 4000) stderr = stderr.slice(-4000);
+    });
+    child.on('error', reject);
+    child.on('close', code => {
+      if (code !== 0) return reject(new Error(`${command} exited with status ${code}: ${stderr}`));
+      fs.readFile(outputFile, (readError, audio) => {
+        fs.rm(outputFile, { force: true }, () => {});
+        if (readError) return reject(readError);
+        resolve(audio);
+      });
+    });
+    child.stdin.end(text);
+  });
+}
+
+async function synthesizeCached(key, synthesize) {
+  const cached = getCachedAudio(key);
+  if (cached) return cached;
+  if (inFlightTts.has(key)) return inFlightTts.get(key);
+  const promise = synthesize().then(audio => {
+    setCachedAudio(key, audio);
+    return audio;
+  }).finally(() => inFlightTts.delete(key));
+  inFlightTts.set(key, promise);
+  return promise;
+}
 
 function send(res, status, headers, body) {
   res.writeHead(status, headers);
@@ -79,19 +145,11 @@ http.createServer((req, res) => {
         return send(res, 503, { 'Content-Type': 'text/plain' }, `Piper model was not found at ${piperModel}`);
       }
 
-      const outputFile = `/tmp/piper-${Date.now()}-${Math.random().toString(16).slice(2)}.wav`;
-      const piper = spawn(piperBinary, ['--model', piperModel, '--output_file', outputFile]);
-      piper.stderr.on('data', chunk => console.error(chunk.toString()));
-      piper.on('error', fail);
-      piper.on('close', code => {
-        if (code !== 0) return fail(`Piper exited with status ${code}`);
-        res.writeHead(200, audioHeaders);
-        const wav = fs.createReadStream(outputFile);
-        wav.on('error', fail);
-        wav.on('close', () => fs.rm(outputFile, { force: true }, () => {}));
-        wav.pipe(res);
-      });
-      piper.stdin.end(text);
+      const key = cacheKey(engine, piperModel, text);
+      const outputFile = `${tmpDir}/piper-${Date.now()}-${Math.random().toString(16).slice(2)}.wav`;
+      synthesizeCached(key, () => synthesizeWithProcess(piperBinary, ['--model', piperModel, '--output_file', outputFile], text, outputFile))
+        .then(audio => send(res, 200, { ...audioHeaders, 'Content-Length': audio.length }, audio))
+        .catch(fail);
       return;
     }
 
@@ -100,7 +158,8 @@ http.createServer((req, res) => {
         return send(res, 503, { 'Content-Type': 'text/plain' }, 'Kokoro model files were not found');
       }
 
-      const outputFile = `/tmp/kokoro-${Date.now()}-${Math.random().toString(16).slice(2)}.wav`;
+      const key = cacheKey(engine, kokoroVoice, text);
+      const outputFile = `${tmpDir}/kokoro-${Date.now()}-${Math.random().toString(16).slice(2)}.wav`;
       const kokoroScript = `import sys
 from kokoro_onnx import Kokoro
 import soundfile as sf
@@ -110,18 +169,9 @@ kokoro = Kokoro(model, voices)
 samples, sample_rate = kokoro.create(text, voice=voice, speed=1.0, lang='en-us')
 sf.write(output_file, samples, sample_rate)
 `;
-      const kokoro = spawn('python3', ['-c', kokoroScript, kokoroModel, kokoroVoices, outputFile, kokoroVoice], { stdio: ['pipe', 'ignore', 'pipe'] });
-      kokoro.stderr.on('data', chunk => console.error(chunk.toString()));
-      kokoro.on('error', fail);
-      kokoro.on('close', code => {
-        if (code !== 0) return fail(`Kokoro exited with status ${code}`);
-        res.writeHead(200, audioHeaders);
-        const wav = fs.createReadStream(outputFile);
-        wav.on('error', fail);
-        wav.on('close', () => fs.rm(outputFile, { force: true }, () => {}));
-        wav.pipe(res);
-      });
-      kokoro.stdin.end(text);
+      synthesizeCached(key, () => synthesizeWithProcess('python3', ['-c', kokoroScript, kokoroModel, kokoroVoices, outputFile, kokoroVoice], text, outputFile, { stdio: ['pipe', 'ignore', 'pipe'] }))
+        .then(audio => send(res, 200, { ...audioHeaders, 'Content-Length': audio.length }, audio))
+        .catch(fail);
       return;
     }
 

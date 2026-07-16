@@ -807,9 +807,11 @@
             return aiResponseText;
         }
 
-        let ttsAudioQueue = [];
         let isTtsAudioPlaying = false;
         let streamingSpeechBuffer = '';
+        let ttsRequestSequence = 0;
+        let nextTtsPlaybackSequence = 0;
+        const pendingTtsAudio = new Map();
 
         function getSelectedTtsEngine() {
             return ttsEngineSelect.value || 'browser';
@@ -827,12 +829,14 @@
 
         function playNextTtsAudio() {
             if (isTtsAudioPlaying) return;
-            const nextUrl = ttsAudioQueue.shift();
+            const nextUrl = pendingTtsAudio.get(nextTtsPlaybackSequence);
             if (!nextUrl) {
                 checkConversationResume();
                 return;
             }
 
+            pendingTtsAudio.delete(nextTtsPlaybackSequence);
+            nextTtsPlaybackSequence++;
             isTtsAudioPlaying = true;
             const audio = new Audio(nextUrl);
             audio.onended = audio.onerror = () => {
@@ -847,19 +851,22 @@
         async function speakWithLocalTts(text) {
             if (!text.trim()) return;
             const engine = getSelectedTtsEngine();
+            const sequence = ttsRequestSequence++;
             chunksSpeaking++;
             try {
                 const params = new URLSearchParams({ text, engine, voice: getLocalTtsVoice() });
                 const response = await fetch(`/api/tts?${params.toString()}`);
                 if (!response.ok) throw new Error(`TTS service returned HTTP ${response.status}`);
                 const audioBlob = await response.blob();
-                ttsAudioQueue.push(URL.createObjectURL(audioBlob));
+                pendingTtsAudio.set(sequence, URL.createObjectURL(audioBlob));
                 playNextTtsAudio();
             } catch (error) {
                 chunksSpeaking--;
+                if (sequence === nextTtsPlaybackSequence) nextTtsPlaybackSequence++;
                 console.error(`Local ${engine} TTS failed:`, error);
                 showError(`Local ${engine} TTS is unavailable. Run ./deploy.sh to use bundled local eSpeak/Piper/Kokoro TTS, or switch TTS back to Browser.`);
                 speakWithBrowser(text);
+                playNextTtsAudio();
             }
         }
 
@@ -987,6 +994,10 @@
             
             streamComplete = false;
             chunksSpeaking = 0;
+            pendingTtsAudio.forEach(url => URL.revokeObjectURL(url));
+            pendingTtsAudio.clear();
+            ttsRequestSequence = 0;
+            nextTtsPlaybackSequence = 0;
             window.speechUtterances = []; 
 
             statusText.innerText = "AI Thinking...";
@@ -1110,8 +1121,10 @@
             sessionActive = false;
             if (recognition) recognition.stop();
             if (synth.speaking) synth.cancel();
-            ttsAudioQueue.forEach(url => URL.revokeObjectURL(url));
-            ttsAudioQueue = [];
+            pendingTtsAudio.forEach(url => URL.revokeObjectURL(url));
+            pendingTtsAudio.clear();
+            ttsRequestSequence = 0;
+            nextTtsPlaybackSequence = 0;
             isTtsAudioPlaying = false;
             streamingSpeechBuffer = '';
             isAITalking = false;

@@ -38,6 +38,7 @@ No compile step is required.
 - The bundled local TTS endpoint is available at `http://localhost:<port>/api/tts` and is used when **TTS: Local eSpeak**, **TTS: Local Piper**, or **TTS: Local Kokoro-82M** is selected in the app.
 - **TTS: Local Piper** uses the same endpoint with `engine=piper`. The container includes a default `en_US-lessac-low` Piper voice; set `PIPER_MODEL` to a mounted Piper `.onnx` voice model path if you want to override it.
 - **TTS: Local Kokoro-82M** uses the same endpoint with `engine=kokoro`. The container downloads Kokoro ONNX model files during build; set `KOKORO_MODEL`, `KOKORO_VOICES`, or `KOKORO_VOICE` to use mounted Kokoro files or a different voice.
+- Local Piper and Kokoro responses are synthesized with in-memory request de-duplication and an LRU audio cache (default `TTS_CACHE_ENTRIES=128`) so repeated chunks return immediately and concurrent identical requests share one synthesis job.
 
 ## Basic controls
 
