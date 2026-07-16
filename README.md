@@ -45,10 +45,10 @@ No compile step is required.
 - **End Session**: stops the active voice/chat session.
 - **Language selector**: sets speech recognition language.
 - **AI Backend selector**: choose a local Ollama model, plus Gemini cloud when at least one Gemini API key is saved in **Settings**.
-- **Gemini key selector**: choose whether Gemini cloud requests use saved Key 1 or Key 2; if the selected slot is empty, the app falls back to the other saved key.
+- **Gemini key selector**: choose which saved Gemini API key Gemini cloud requests use. Saved keys can be named in **Settings** (for example, “Billing” or “Free”); if the selected slot is empty, the app falls back to the other saved key.
 - **Stream tokens**: optionally render AI responses token-by-token as they arrive. With **TTS: Local eSpeak**, **TTS: Local Piper**, or **TTS: Local Kokoro-82M**, speech is queued in sentence or short phrase chunks as text streams in, so playback can start before the AI response is complete. Browser TTS still waits for the full response because browser speech synthesis does not accept incremental audio input.
 - **TTS selector**: choose browser speech synthesis, the deployed local eSpeak service, the deployed local Piper service, or the deployed local Kokoro-82M service. The local options require running the app through `deploy.sh`; the container bundles eSpeak, a default Piper voice, and Kokoro-82M model files.
-- **Settings (gear icon)**: save/update two Gemini API key slots, choose the active Gemini key, and set optional prompt behaviour/personality instructions. Saved prompt instructions override the default friendly British chat style; leave the field blank to use the default.
+- **Settings (gear icon)**: name and save/update two Gemini API key slots, choose the active Gemini key, and set optional prompt behaviour/personality instructions. Saved prompt instructions override the default friendly British chat style; leave the field blank to use the default.
 - **Transcript panel**: shows conversation turns and current output.
 - **Text input box**: type a message and press **Send** (or Enter) as an alternative to speaking; use Shift+Enter for a new line.
 

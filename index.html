@@ -182,13 +182,25 @@
             <p class="text-slate-400 text-sm mb-6">Enter up to two Gemini API keys to use cloud features, then choose which saved key should be active. You can get one for free at <a href="https://aistudio.google.com/" target="_blank" class="text-indigo-400 hover:underline">Google AI Studio</a>.</p>
             
             <div class="space-y-4">
-                <div>
-                    <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="apiKeyInputPrimary">Gemini API Key 1</label>
-                    <input type="password" id="apiKeyInputPrimary" placeholder="Paste key 1 here" class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                <div class="grid gap-2 sm:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)]">
+                    <div>
+                        <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="apiKeyNameInputPrimary">Key 1 name</label>
+                        <input type="text" id="apiKeyNameInputPrimary" placeholder="e.g. Billing" class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="apiKeyInputPrimary">Gemini API Key 1</label>
+                        <input type="password" id="apiKeyInputPrimary" placeholder="Paste key 1 here" class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                    </div>
                 </div>
-                <div>
-                    <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="apiKeyInputSecondary">Gemini API Key 2</label>
-                    <input type="password" id="apiKeyInputSecondary" placeholder="Paste key 2 here" class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                <div class="grid gap-2 sm:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)]">
+                    <div>
+                        <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="apiKeyNameInputSecondary">Key 2 name</label>
+                        <input type="text" id="apiKeyNameInputSecondary" placeholder="e.g. Free" class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="apiKeyInputSecondary">Gemini API Key 2</label>
+                        <input type="password" id="apiKeyInputSecondary" placeholder="Paste key 2 here" class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                    </div>
                 </div>
                 <div>
                     <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="promptInstructionsInput">Prompt behaviour / personality</label>
@@ -243,6 +255,8 @@
         const settingsModal = document.getElementById('settingsModal');
         const apiKeyInputPrimary = document.getElementById('apiKeyInputPrimary');
         const apiKeyInputSecondary = document.getElementById('apiKeyInputSecondary');
+        const apiKeyNameInputPrimary = document.getElementById('apiKeyNameInputPrimary');
+        const apiKeyNameInputSecondary = document.getElementById('apiKeyNameInputSecondary');
         const promptInstructionsInput = document.getElementById('promptInstructionsInput');
         const languageSelect = document.getElementById('languageSelect');
         const aiModelSelect = document.getElementById('aiModelSelect');
@@ -269,15 +283,22 @@
         const GEMINI_MODEL = 'gemini-3.5-flash';
 
         const defaultSystemPrompt = "You are a friendly, natural British person having a casual spoken conversation. Keep your responses extremely brief (usually one sentence, max two). Speak casually and warmly. Avoid formal AI language, lists, or markdown. Just act like a mate chatting over tea.";
+        const defaultApiKeyNames = { primary: 'Key 1', secondary: 'Key 2' };
         let savedApiKeys = {
             primary: localStorage.getItem('voxscribe_gemini_key_primary') || localStorage.getItem('voxscribe_gemini_key') || "",
             secondary: localStorage.getItem('voxscribe_gemini_key_secondary') || ""
+        };
+        let savedApiKeyNames = {
+            primary: localStorage.getItem('voxscribe_gemini_key_name_primary') || defaultApiKeyNames.primary,
+            secondary: localStorage.getItem('voxscribe_gemini_key_name_secondary') || defaultApiKeyNames.secondary
         };
         let activeGeminiKeySlot = localStorage.getItem('voxscribe_gemini_key_active') || 'primary';
         if (!['primary', 'secondary'].includes(activeGeminiKeySlot)) activeGeminiKeySlot = 'primary';
         let savedPromptInstructions = localStorage.getItem('voxscribe_prompt_instructions') || "";
         apiKeyInputPrimary.value = savedApiKeys.primary;
         apiKeyInputSecondary.value = savedApiKeys.secondary;
+        apiKeyNameInputPrimary.value = savedApiKeyNames.primary;
+        apiKeyNameInputSecondary.value = savedApiKeyNames.secondary;
         geminiKeySelect.value = activeGeminiKeySlot;
         promptInstructionsInput.value = savedPromptInstructions || defaultSystemPrompt;
 
@@ -320,7 +341,18 @@
             return savedApiKeys[activeGeminiKeySlot] || "";
         }
 
+        function getGeminiKeyDisplayName(slot) {
+            return (savedApiKeyNames[slot] || defaultApiKeyNames[slot]).trim() || defaultApiKeyNames[slot];
+        }
+
+        function updateGeminiKeySelectLabels() {
+            Array.from(geminiKeySelect.options).forEach(option => {
+                option.textContent = getGeminiKeyDisplayName(option.value);
+            });
+        }
+
         function updateGeminiOptionVisibility() {
+            updateGeminiKeySelectLabels();
             const hasAnyApiKey = Object.values(savedApiKeys).some(Boolean);
             const hasActiveApiKey = Boolean(getActiveGeminiKey());
             geminiCloudOption.hidden = !hasAnyApiKey;
@@ -1016,11 +1048,17 @@
                 primary: apiKeyInputPrimary.value.trim(),
                 secondary: apiKeyInputSecondary.value.trim()
             };
+            savedApiKeyNames = {
+                primary: apiKeyNameInputPrimary.value.trim() || defaultApiKeyNames.primary,
+                secondary: apiKeyNameInputSecondary.value.trim() || defaultApiKeyNames.secondary
+            };
             activeGeminiKeySlot = geminiKeySelect.value;
             const promptInstructions = promptInstructionsInput.value.trim();
             savedPromptInstructions = promptInstructions === defaultSystemPrompt ? "" : promptInstructions;
             localStorage.setItem('voxscribe_gemini_key_primary', savedApiKeys.primary);
             localStorage.setItem('voxscribe_gemini_key_secondary', savedApiKeys.secondary);
+            localStorage.setItem('voxscribe_gemini_key_name_primary', savedApiKeyNames.primary);
+            localStorage.setItem('voxscribe_gemini_key_name_secondary', savedApiKeyNames.secondary);
             localStorage.setItem('voxscribe_gemini_key_active', activeGeminiKeySlot);
             localStorage.removeItem('voxscribe_gemini_key');
             if (savedPromptInstructions) {
