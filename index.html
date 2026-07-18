@@ -297,7 +297,7 @@
             <div class="border-b border-white/5 p-3 md:px-5 bg-slate-900/40 flex flex-wrap items-center justify-center gap-3 compact-on-short">
                 <div class="flex items-center gap-4">
                     <button id="startBtn" class="premium-btn flex items-center gap-2 text-white px-6 py-2.5 rounded-xl font-semibold transition-all active:scale-95">
-                        <i class="fa-solid fa-comments text-sm"></i> Start Conversation
+                        <i class="fa-solid fa-comments text-sm"></i> Speak
                     </button>
                     <button id="stopBtn" class="stop-btn hidden flex items-center gap-2 text-white px-6 py-2.5 rounded-xl font-semibold transition-all active:scale-95">
                         <i class="fa-solid fa-power-off text-sm"></i> End Session
@@ -312,13 +312,9 @@
             <div id="editorContainer" class="relative min-h-0 grid grid-rows-[1fr_auto]">
                 <section id="transcriptArea" class="horizontal-stage p-4 md:p-6 text-slate-200 focus:outline-none" contenteditable="false" aria-label="Conversation display">
                     <article class="scroll-text-card rounded-2xl border border-indigo-500/20 bg-slate-900/70 p-4 md:p-6 shadow-lg shadow-indigo-600/10">
-                        <div class="flex items-center justify-between gap-3 text-xs font-bold uppercase tracking-[0.24em] text-indigo-300">
-                            <span><i class="fa-solid fa-wave-square mr-2"></i>Conversation scroller</span>
-                            <span class="text-cyan-200/60">demo-mode marquee</span>
-                        </div>
-                        <div id="conversationTextScroller" class="scroll-text-line mt-3 text-4xl md:text-6xl font-semibold leading-tight" tabindex="0">
+                        <div id="conversationTextScroller" class="scroll-text-line text-4xl md:text-6xl font-semibold leading-tight" tabindex="0">
                             <span id="conversationTextDisplay" class="scroll-text-content">
-                                <span id="userTextDisplay" class="scroll-text-segment text-slate-500 italic font-light">Click "Start Conversation" and say hello...</span>
+                                <span id="userTextDisplay" class="scroll-text-segment text-slate-500 italic font-light">Click "Speak" and say hello...</span>
                                 <span class="scroll-text-separator" aria-hidden="true">◆◆◆</span>
                                 <span id="aiTextDisplay" class="scroll-text-segment text-slate-500 italic font-light">AI response will appear here...</span>
                             </span>
@@ -328,7 +324,7 @@
                 
                 <form id="textInputForm" class="border-t border-white/5 bg-slate-900/60 p-3 md:p-4 flex flex-col sm:flex-row gap-3 compact-on-short" aria-label="Send typed message">
                     <label for="textInput" class="sr-only">Type a message</label>
-                    <textarea id="textInput" rows="1" placeholder="Type a message instead of speaking..." class="flex-1 max-h-24 resize-none bg-slate-950/70 border border-slate-700 text-white placeholder:text-slate-500 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none transition-all custom-scrollbar" autocomplete="off"></textarea>
+                    <textarea id="textInput" rows="1" placeholder="Your message" class="flex-1 max-h-24 resize-none bg-slate-950/70 border border-slate-700 text-white placeholder:text-slate-500 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none transition-all custom-scrollbar" autocomplete="off"></textarea>
                     <button id="sendTextBtn" type="submit" class="premium-btn flex items-center justify-center gap-2 text-white px-6 py-3 rounded-xl font-semibold transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
                         <i class="fa-solid fa-paper-plane text-sm"></i> Send
                     </button>
@@ -1005,7 +1001,7 @@
         }
 
         function setUserSpeechText(text, restartScroller = true) {
-            setHorizontalText(userTextDisplay, text, 'Click "Start Conversation" and say hello...', 'text-red-400', restartScroller);
+            setHorizontalText(userTextDisplay, text, 'Click "Speak" and say hello...', 'text-red-400', restartScroller);
         }
 
         function setAiResponseText(text, restartScroller = true) {
@@ -1428,7 +1424,7 @@
         function setTextInputDisabled(disabled) {
             textInput.disabled = disabled;
             sendTextBtn.disabled = disabled;
-            textInput.placeholder = disabled ? 'Waiting for AI response...' : 'Type a message instead of speaking...';
+            textInput.placeholder = disabled ? 'Waiting for AI response...' : 'Your message';
         }
 
         function resizeTextInput() {
