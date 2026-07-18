@@ -354,19 +354,45 @@ docker build -t "${IMAGE_NAME}" "${BUILD_DIR}"
 echo "Stopping existing container (if any)..."
 docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
 
+DOCKER_RUN_ARGS=(
+  --name "${CONTAINER_NAME}"
+  -p "${PORT_ARG}:${PORT_ARG}"
+  -e PORT="${PORT_ARG}"
+  -e GEMINI_API_KEY
+  -e GEMINI_API_KEY_PRIMARY
+  -e GEMINI_API_KEY_SECONDARY
+  -e GEMINI_MODEL
+  -e OLLAMA_ENDPOINT
+  -e PIPER_BINARY
+  -e KOKORO_MODEL
+  -e KOKORO_VOICES
+  -e KOKORO_VOICE
+  -e TTS_CACHE_ENTRIES
+  --add-host=host.docker.internal:host-gateway
+  --restart unless-stopped
+)
+
+if [ -n "${PIPER_MODEL:-}" ]; then
+  if [ -f "${PIPER_MODEL}" ]; then
+    PIPER_MODEL_HOST_PATH="$(cd "$(dirname "${PIPER_MODEL}")" && pwd)/$(basename "${PIPER_MODEL}")"
+    DOCKER_RUN_ARGS+=(
+      -v "$(dirname "${PIPER_MODEL_HOST_PATH}"):/custom_voice:ro"
+      -e "PIPER_MODEL=/custom_voice/$(basename "${PIPER_MODEL_HOST_PATH}")"
+    )
+  elif [[ "${PIPER_MODEL}" == /custom_voice/* && -f "${SCRIPT_DIR}${PIPER_MODEL}" ]]; then
+    DOCKER_RUN_ARGS+=(
+      -v "${SCRIPT_DIR}/custom_voice:/custom_voice:ro"
+      -e "PIPER_MODEL=${PIPER_MODEL}"
+    )
+  else
+    DOCKER_RUN_ARGS+=(-e PIPER_MODEL)
+    echo "Warning: PIPER_MODEL is set to '${PIPER_MODEL}', but deploy.sh could not find that model file on the host."
+    echo "         Mount the model yourself or set PIPER_MODEL to a host .onnx path so deploy.sh can mount it."
+  fi
+fi
+
 echo "Starting container..."
-docker run -d \
-  --name "${CONTAINER_NAME}" \
-  -p "${PORT_ARG}:${PORT_ARG}" \
-  -e PORT="${PORT_ARG}" \
-  -e GEMINI_API_KEY \
-  -e GEMINI_API_KEY_PRIMARY \
-  -e GEMINI_API_KEY_SECONDARY \
-  -e GEMINI_MODEL \
-  -e OLLAMA_ENDPOINT \
-  --add-host=host.docker.internal:host-gateway \
-  --restart unless-stopped \
-  "${IMAGE_NAME}" >/dev/null
+docker run -d "${DOCKER_RUN_ARGS[@]}" "${IMAGE_NAME}" >/dev/null
 
 echo "========================================="
 echo "Deployed ${PROJECT_NAME}."
