@@ -106,35 +106,81 @@
 
         .scroll-text-line {
             min-width: 0;
-            overflow-x: auto;
-            overflow-y: hidden;
+            overflow: hidden;
             white-space: nowrap;
-            scrollbar-gutter: stable;
+            position: relative;
+            border-radius: 1rem;
+            background:
+                linear-gradient(90deg, rgba(11, 15, 25, 0.95), transparent 16%, transparent 84%, rgba(11, 15, 25, 0.95)),
+                repeating-linear-gradient(0deg, rgba(129, 140, 248, 0.08) 0 1px, transparent 1px 7px),
+                radial-gradient(circle at 50% 50%, rgba(34, 211, 238, 0.14), transparent 65%);
+            box-shadow: inset 0 0 28px rgba(99, 102, 241, 0.18), 0 0 28px rgba(34, 211, 238, 0.08);
         }
 
-        .scroll-text-line::-webkit-scrollbar {
-            height: 10px;
+        .scroll-text-line::before,
+        .scroll-text-line::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 2;
         }
 
-        .scroll-text-line::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.03);
-            border-radius: 999px;
+        .scroll-text-line::before {
+            background: linear-gradient(180deg, transparent 0 45%, rgba(255, 255, 255, 0.18) 50%, transparent 55%);
+            mix-blend-mode: screen;
+            opacity: 0.35;
         }
 
-        .scroll-text-line::-webkit-scrollbar-thumb {
-            background: rgba(129, 140, 248, 0.35);
-            border-radius: 999px;
+        .scroll-text-line::after {
+            background: repeating-linear-gradient(90deg, transparent 0 2rem, rgba(34, 211, 238, 0.08) 2rem 2.1rem);
+            animation: scannerSweep 2.6s linear infinite;
         }
 
         .scroll-text-content {
             display: inline-flex;
             align-items: baseline;
-            gap: 1.5rem;
+            gap: 2rem;
             min-width: max-content;
+            padding-block: 0.25rem;
+            padding-left: 100%;
+            text-shadow: 0 0 10px currentColor, 0 0 22px currentColor, 0 0 42px rgba(34, 211, 238, 0.45);
+            animation: amigaTicker 18s linear infinite;
+            will-change: transform;
+        }
+
+        .scroll-text-line:hover .scroll-text-content,
+        .scroll-text-line:focus-within .scroll-text-content {
+            animation-play-state: paused;
         }
 
         .scroll-text-segment {
             display: inline-block;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .scroll-text-separator {
+            color: #22d3ee;
+            text-shadow: 0 0 10px #22d3ee, 0 0 24px #818cf8;
+        }
+
+        @keyframes amigaTicker {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(0); }
+        }
+
+        @keyframes scannerSweep {
+            from { transform: translateX(-2.1rem); }
+            to { transform: translateX(0); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .scroll-text-content,
+            .scroll-text-line::after {
+                animation-duration: 1ms;
+                animation-iteration-count: 1;
+            }
         }
 
         @media (max-height: 740px) {
@@ -233,11 +279,12 @@
                     <article class="scroll-text-card rounded-2xl border border-indigo-500/20 bg-slate-900/70 p-4 md:p-6 shadow-lg shadow-indigo-600/10">
                         <div class="flex items-center justify-between gap-3 text-xs font-bold uppercase tracking-[0.24em] text-indigo-300">
                             <span><i class="fa-solid fa-wave-square mr-2"></i>Conversation scroller</span>
-                            <span class="text-indigo-200/50">scroll sideways</span>
+                            <span class="text-cyan-200/60">demo-mode marquee</span>
                         </div>
                         <div id="conversationTextScroller" class="scroll-text-line mt-3 text-4xl md:text-6xl font-semibold leading-tight" tabindex="0">
                             <span id="conversationTextDisplay" class="scroll-text-content">
                                 <span id="userTextDisplay" class="scroll-text-segment text-slate-500 italic font-light">Click "Start Conversation" and say hello...</span>
+                                <span class="scroll-text-separator" aria-hidden="true">◆◆◆</span>
                                 <span id="aiTextDisplay" class="scroll-text-segment text-slate-500 italic font-light">AI response will appear here...</span>
                             </span>
                         </div>
@@ -816,10 +863,12 @@
             };
         }
 
-        function scrollConversationTextToEnd() {
-            requestAnimationFrame(() => {
-                conversationTextScroller.scrollLeft = conversationTextScroller.scrollWidth;
-            });
+        function restartConversationMarquee() {
+            const scrollerContent = document.getElementById('conversationTextDisplay');
+            if (!scrollerContent) return;
+            scrollerContent.style.animation = 'none';
+            scrollerContent.offsetHeight;
+            scrollerContent.style.animation = '';
         }
 
         function setHorizontalText(displayElement, text, placeholderText, activeColorClass) {
@@ -829,7 +878,7 @@
             displayElement.classList.toggle('italic', !value);
             displayElement.classList.toggle('font-light', !value);
             displayElement.classList.toggle(activeColorClass, Boolean(value));
-            scrollConversationTextToEnd();
+            restartConversationMarquee();
         }
 
         function setUserSpeechText(text) {
