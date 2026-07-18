@@ -182,7 +182,7 @@
             <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
                 <i class="fa-solid fa-key text-indigo-400"></i> API Settings
             </h3>
-            <p class="text-slate-400 text-sm mb-6">Enter up to two Gemini API keys to use cloud features, then choose which saved key should be active. You can get one for free at <a href="https://aistudio.google.com/" target="_blank" class="text-indigo-400 hover:underline">Google AI Studio</a>.</p>
+            <p class="text-slate-400 text-sm mb-6">Gemini API requests are sent through this app's hosting server so API keys are not exposed to browsers. Configure keys on the server/container, then choose which server key should be active.</p>
             
             <div class="space-y-4">
                 <div class="grid gap-2 sm:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)]">
@@ -191,8 +191,8 @@
                         <input type="text" id="apiKeyNameInputPrimary" placeholder="e.g. Billing" class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
                     </div>
                     <div>
-                        <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="apiKeyInputPrimary">Gemini API Key 1</label>
-                        <input type="password" id="apiKeyInputPrimary" placeholder="Paste key 1 here" class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                        <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="apiKeyInputPrimary">Server key 1</label>
+                        <input type="text" id="apiKeyInputPrimary" value="Configured on hosting server" disabled class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-slate-400 opacity-70 outline-none transition-all">
                     </div>
                 </div>
                 <div class="grid gap-2 sm:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)]">
@@ -201,13 +201,13 @@
                         <input type="text" id="apiKeyNameInputSecondary" placeholder="e.g. Free" class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
                     </div>
                     <div>
-                        <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="apiKeyInputSecondary">Gemini API Key 2</label>
-                        <input type="password" id="apiKeyInputSecondary" placeholder="Paste key 2 here" class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                        <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="apiKeyInputSecondary">Server key 2</label>
+                        <input type="text" id="apiKeyInputSecondary" value="Configured on hosting server" disabled class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-slate-400 opacity-70 outline-none transition-all">
                     </div>
                 </div>
                 <div class="border border-slate-700/70 rounded-2xl p-4 bg-slate-900/30">
                     <h4 class="text-sm font-bold text-white mb-2 flex items-center gap-2"><i class="fa-solid fa-server text-indigo-400"></i> Remote Ollama servers</h4>
-                    <p class="text-xs text-slate-500 mb-3">Add Ollama servers you can reach from this browser. Include the protocol and port, for example <code>http://192.168.1.20:11434</code>.</p>
+                    <p class="text-xs text-slate-500 mb-3">Add Ollama servers the hosting container can reach. Phone browsers use this app's server-side Ollama proxy, so you can use host/container addresses such as <code>http://host.docker.internal:11434</code> or LAN addresses like <code>http://192.168.1.20:11434</code>.</p>
                     <div class="grid gap-2 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
                         <div>
                             <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="remoteOllamaNameInput">Server name</label>
@@ -315,10 +315,9 @@
 
         const defaultSystemPrompt = "You are a friendly, natural British person having a casual spoken conversation. Keep your responses extremely brief (usually one sentence, max two). Speak casually and warmly. Avoid formal AI language, lists, or markdown. Just act like a mate chatting over tea.";
         const defaultApiKeyNames = { primary: 'Key 1', secondary: 'Key 2' };
-        let savedApiKeys = {
-            primary: localStorage.getItem('voxscribe_gemini_key_primary') || localStorage.getItem('voxscribe_gemini_key') || "",
-            secondary: localStorage.getItem('voxscribe_gemini_key_secondary') || ""
-        };
+        let serverGeminiKeys = { primary: false, secondary: false };
+        let serverOllamaProxyAvailable = false;
+        let defaultOllamaEndpoint = 'http://127.0.0.1:11434';
         let savedApiKeyNames = {
             primary: localStorage.getItem('voxscribe_gemini_key_name_primary') || defaultApiKeyNames.primary,
             secondary: localStorage.getItem('voxscribe_gemini_key_name_secondary') || defaultApiKeyNames.secondary
@@ -327,8 +326,8 @@
         if (!['primary', 'secondary'].includes(activeGeminiKeySlot)) activeGeminiKeySlot = 'primary';
         let savedPromptInstructions = localStorage.getItem('voxscribe_prompt_instructions') || "";
         let savedRemoteOllamas = loadRemoteOllamas();
-        apiKeyInputPrimary.value = savedApiKeys.primary;
-        apiKeyInputSecondary.value = savedApiKeys.secondary;
+        apiKeyInputPrimary.value = 'Configured on hosting server';
+        apiKeyInputSecondary.value = 'Configured on hosting server';
         apiKeyNameInputPrimary.value = savedApiKeyNames.primary;
         apiKeyNameInputSecondary.value = savedApiKeyNames.secondary;
         geminiKeySelect.value = activeGeminiKeySlot;
@@ -419,7 +418,7 @@
                 const [, remoteId] = selection.split(':');
                 return savedRemoteOllamas.find(remote => remote.id === remoteId)?.url || null;
             }
-            return 'http://127.0.0.1:11434';
+            return defaultOllamaEndpoint;
         }
 
         function getOllamaModelNameForSelection(selection) {
@@ -429,8 +428,21 @@
             return selection.replace('ollama:', '');
         }
 
-        function getActiveGeminiKey() {
-            return savedApiKeys[activeGeminiKeySlot] || "";
+
+        function getOllamaProxyUrl(endpoint, path) {
+            const params = new URLSearchParams({ endpoint, path });
+            return `/api/ollama?${params.toString()}`;
+        }
+
+        async function fetchOllama(endpoint, path, options = {}) {
+            if (serverOllamaProxyAvailable) {
+                return fetch(getOllamaProxyUrl(endpoint, path), options);
+            }
+            return fetch(`${endpoint}${path}`, options);
+        }
+
+        function hasActiveGeminiServerKey() {
+            return Boolean(serverGeminiKeys[activeGeminiKeySlot]);
         }
 
         function getGeminiKeyDisplayName(slot) {
@@ -445,15 +457,15 @@
 
         function updateGeminiOptionVisibility() {
             updateGeminiKeySelectLabels();
-            const hasAnyApiKey = Object.values(savedApiKeys).some(Boolean);
-            const hasActiveApiKey = Boolean(getActiveGeminiKey());
+            const hasAnyApiKey = Object.values(serverGeminiKeys).some(Boolean);
+            const hasActiveApiKey = hasActiveGeminiServerKey();
             geminiCloudOption.hidden = !hasAnyApiKey;
             geminiCloudOption.disabled = !hasAnyApiKey;
             geminiKeySelect.disabled = !hasAnyApiKey;
             geminiKeySelect.classList.toggle('opacity-50', !hasAnyApiKey);
 
             if (!hasActiveApiKey && hasAnyApiKey) {
-                const fallbackSlot = savedApiKeys.primary ? 'primary' : 'secondary';
+                const fallbackSlot = serverGeminiKeys.primary ? 'primary' : 'secondary';
                 activeGeminiKeySlot = fallbackSlot;
                 geminiKeySelect.value = fallbackSlot;
                 localStorage.setItem('voxscribe_gemini_key_active', fallbackSlot);
@@ -475,7 +487,7 @@
             try {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 2500);
-                const response = await fetch(`${endpoint}/api/tags`, { signal: controller.signal });
+                const response = await fetchOllama(endpoint, '/api/tags', { signal: controller.signal });
                 clearTimeout(timeoutId);
                 if (!response.ok) throw new Error();
                 const data = await response.json();
@@ -502,7 +514,7 @@
         }
 
         async function fetchOllamaModels() {
-            await populateOllamaGroup(ollamaGroup, 'http://127.0.0.1:11434', { errorText: 'Local Ollama unreachable' });
+            await populateOllamaGroup(ollamaGroup, defaultOllamaEndpoint, { errorText: serverOllamaProxyAvailable ? 'Host Ollama unreachable' : 'Local Ollama unreachable' });
 
             remoteOllamaGroup.innerHTML = '';
             if (!savedRemoteOllamas.length) {
@@ -528,9 +540,30 @@
             }
             updateGeminiOptionVisibility();
         }
-        renderRemoteOllamaSelect();
-        fetchOllamaModels();
-        updateGeminiOptionVisibility();
+        async function fetchServerAiConfig() {
+            try {
+                const response = await fetch('/api/config');
+                if (!response.ok) throw new Error();
+                const config = await response.json();
+                serverGeminiKeys = config.geminiKeys || serverGeminiKeys;
+                serverOllamaProxyAvailable = Boolean(config.ollamaProxy);
+                defaultOllamaEndpoint = config.defaultOllamaEndpoint || defaultOllamaEndpoint;
+            } catch (error) {
+                serverGeminiKeys = { primary: false, secondary: false };
+                serverOllamaProxyAvailable = false;
+                defaultOllamaEndpoint = 'http://127.0.0.1:11434';
+            }
+            updateGeminiOptionVisibility();
+        }
+
+        async function initializeAiBackends() {
+            renderRemoteOllamaSelect();
+            await fetchServerAiConfig();
+            await fetchOllamaModels();
+            updateGeminiOptionVisibility();
+        }
+
+        initializeAiBackends();
 
         function getSecureOriginHint() {
             const isLocalhost = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
@@ -1028,11 +1061,8 @@
                 const shouldStreamTokens = streamingToggle.checked;
 
                 if (selectedModel === 'gemini') {
-                    const activeGeminiKey = getActiveGeminiKey();
-                    if (!activeGeminiKey) throw new Error("Missing Gemini API Key. Check Settings.");
-                    const geminiEndpoint = shouldStreamTokens ? 'streamGenerateContent?alt=sse' : 'generateContent';
-                    const separator = shouldStreamTokens ? '&' : '?';
-                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:${geminiEndpoint}${separator}key=${activeGeminiKey}`;
+                    if (!hasActiveGeminiServerKey()) throw new Error("Missing server-side Gemini API key. Configure GEMINI_API_KEY, GEMINI_API_KEY_PRIMARY, or GEMINI_API_KEY_SECONDARY on the hosting container.");
+                    const url = `/api/gemini?stream=${shouldStreamTokens ? '1' : '0'}&slot=${encodeURIComponent(activeGeminiKeySlot)}`;
                     const geminiContents = chatHistory.map(msg => ({
                         role: msg.role === 'assistant' ? 'model' : 'user',
                         parts: [{ text: msg.content }]
@@ -1077,7 +1107,7 @@
 
                     if (shouldStreamTokens) {
                         const msgDiv = createAssistantMessageElement();
-                        const response = await fetchWithRetry(`${ollamaEndpoint}/api/chat`, {
+                        const response = await fetchWithRetry(serverOllamaProxyAvailable ? getOllamaProxyUrl(ollamaEndpoint, '/api/chat') : `${ollamaEndpoint}/api/chat`, {
                             method: 'POST',
                             headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
                             body: JSON.stringify(requestBody)
@@ -1085,7 +1115,7 @@
                         aiResponseText = await readOllamaStreamingResponse(response, msgDiv, queueStreamingSpeechChunk) || "No response.";
                         queueStreamingSpeechChunk('', true);
                     } else {
-                        const response = await fetchWithRetry(`${ollamaEndpoint}/api/chat`, {
+                        const response = await fetchWithRetry(serverOllamaProxyAvailable ? getOllamaProxyUrl(ollamaEndpoint, '/api/chat') : `${ollamaEndpoint}/api/chat`, {
                             method: 'POST',
                             headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
                             body: JSON.stringify(requestBody)
@@ -1236,10 +1266,6 @@
         openSettings.addEventListener('click', () => settingsModal.classList.remove('hidden'));
         closeSettings.addEventListener('click', () => settingsModal.classList.add('hidden'));
         saveSettings.addEventListener('click', () => {
-            savedApiKeys = {
-                primary: apiKeyInputPrimary.value.trim(),
-                secondary: apiKeyInputSecondary.value.trim()
-            };
             savedApiKeyNames = {
                 primary: apiKeyNameInputPrimary.value.trim() || defaultApiKeyNames.primary,
                 secondary: apiKeyNameInputSecondary.value.trim() || defaultApiKeyNames.secondary
@@ -1247,8 +1273,8 @@
             activeGeminiKeySlot = geminiKeySelect.value;
             const promptInstructions = promptInstructionsInput.value.trim();
             savedPromptInstructions = promptInstructions === defaultSystemPrompt ? "" : promptInstructions;
-            localStorage.setItem('voxscribe_gemini_key_primary', savedApiKeys.primary);
-            localStorage.setItem('voxscribe_gemini_key_secondary', savedApiKeys.secondary);
+            localStorage.removeItem('voxscribe_gemini_key_primary');
+            localStorage.removeItem('voxscribe_gemini_key_secondary');
             localStorage.setItem('voxscribe_gemini_key_name_primary', savedApiKeyNames.primary);
             localStorage.setItem('voxscribe_gemini_key_name_secondary', savedApiKeyNames.secondary);
             localStorage.setItem('voxscribe_gemini_key_active', activeGeminiKeySlot);
