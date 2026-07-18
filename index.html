@@ -130,6 +130,7 @@
                 repeating-linear-gradient(0deg, rgba(129, 140, 248, 0.08) 0 1px, transparent 1px 7px),
                 radial-gradient(circle at 50% 50%, rgba(34, 211, 238, 0.14), transparent 65%);
             box-shadow: inset 0 0 28px rgba(99, 102, 241, 0.18), 0 0 28px rgba(34, 211, 238, 0.08);
+            font-size: calc(clamp(2.25rem, 6vw, 3.75rem) * var(--scroller-text-scale, 1));
         }
 
         .scroll-text-line::before,
@@ -256,7 +257,7 @@
             }
 
             .scroll-text-line {
-                font-size: clamp(2rem, 12vw, 3rem);
+                font-size: calc(clamp(2rem, 12vw, 3rem) * var(--scroller-text-scale, 1));
             }
         }
 
@@ -452,6 +453,15 @@
                         <span>Faster</span>
                     </div>
                     <p class="text-xs text-slate-500 mt-2">Adjust how quickly each conversation marquee message crosses the display.</p>
+                    <div class="mt-4">
+                        <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="scrollerTextSizeSelect">Scroller text size</label>
+                        <select id="scrollerTextSizeSelect" class="w-full bg-slate-900/50 border border-slate-700 text-white rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer">
+                            <option value="1">Default</option>
+                            <option value="2">x2 (double size)</option>
+                            <option value="3">x3 (triple size)</option>
+                        </select>
+                        <p class="text-xs text-slate-500 mt-2">Choose how large the conversation scroller text appears.</p>
+                    </div>
                 </div>
                 <div class="border border-slate-700/70 rounded-2xl p-4 bg-slate-900/30">
                     <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="promptSelect">Prompt behaviour / personality</label>
@@ -522,6 +532,7 @@
         const promptInstructionsInput = document.getElementById('promptInstructionsInput');
         const scrollSpeedInput = document.getElementById('scrollSpeedInput');
         const scrollSpeedValue = document.getElementById('scrollSpeedValue');
+        const scrollerTextSizeSelect = document.getElementById('scrollerTextSizeSelect');
         const languageSelect = document.getElementById('languageSelect');
         const aiModelSelect = document.getElementById('aiModelSelect');
         const streamingToggle = document.getElementById('streamingToggle');
@@ -574,6 +585,8 @@
         let serverPromptPersistenceAvailable = false;
         let savedScrollSpeed = parseFloat(localStorage.getItem('voxscribe_scroll_speed') || '1');
         if (!Number.isFinite(savedScrollSpeed) || savedScrollSpeed < 0.5 || savedScrollSpeed > 4) savedScrollSpeed = 1;
+        let savedScrollerTextScale = parseInt(localStorage.getItem('voxscribe_scroller_text_scale') || '1', 10);
+        if (![1, 2, 3].includes(savedScrollerTextScale)) savedScrollerTextScale = 1;
         let savedRemoteOllamas = loadRemoteOllamas();
         apiKeyInputPrimary.value = 'Configured on hosting server';
         apiKeyInputSecondary.value = 'Configured on hosting server';
@@ -582,6 +595,7 @@
         geminiKeySelect.value = activeGeminiKeySlot;
         renderPromptSelect();
         scrollSpeedInput.value = savedScrollSpeed;
+        scrollerTextSizeSelect.value = String(savedScrollerTextScale);
 
         function createDefaultPrompt() {
             return { id: 'default', name: 'Default friendly British chat', prompt: defaultSystemPrompt };
@@ -712,7 +726,13 @@
             scrollSpeedValue.textContent = getScrollSpeedLabel(speed);
         }
 
+        function applyScrollerTextScale(scale) {
+            savedScrollerTextScale = scale;
+            document.documentElement.style.setProperty('--scroller-text-scale', String(scale));
+        }
+
         applyScrollSpeed(savedScrollSpeed);
+        applyScrollerTextScale(savedScrollerTextScale);
 
         const savedLang = localStorage.getItem('voxscribe_language');
         if (savedLang) languageSelect.value = savedLang;
@@ -745,6 +765,11 @@
 
         scrollSpeedInput.addEventListener('input', () => {
             applyScrollSpeed(parseFloat(scrollSpeedInput.value));
+        });
+
+        scrollerTextSizeSelect.addEventListener('change', () => {
+            applyScrollerTextScale(parseInt(scrollerTextSizeSelect.value, 10));
+            localStorage.setItem('voxscribe_scroller_text_scale', String(savedScrollerTextScale));
         });
 
         geminiKeySelect.addEventListener('change', () => {
@@ -1723,9 +1748,11 @@
             localStorage.setItem('voxscribe_gemini_key_name_secondary', savedApiKeyNames.secondary);
             localStorage.setItem('voxscribe_gemini_key_active', activeGeminiKeySlot);
             localStorage.setItem('voxscribe_scroll_speed', String(savedScrollSpeed));
+            localStorage.setItem('voxscribe_scroller_text_scale', String(savedScrollerTextScale));
             localStorage.removeItem('voxscribe_gemini_key');
             const promptSavedOnServer = await saveServerPromptInstructions();
             scrollSpeedInput.value = savedScrollSpeed;
+            scrollerTextSizeSelect.value = String(savedScrollerTextScale);
             updateGeminiOptionVisibility();
             settingsModal.classList.add('hidden');
             toastMsg.innerText = promptSavedOnServer ? "Settings Saved" : "Settings Saved Locally";
