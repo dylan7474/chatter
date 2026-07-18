@@ -556,6 +556,7 @@
         let activeGeminiKeySlot = localStorage.getItem('voxscribe_gemini_key_active') || 'primary';
         if (!['primary', 'secondary'].includes(activeGeminiKeySlot)) activeGeminiKeySlot = 'primary';
         let savedPromptInstructions = localStorage.getItem('voxscribe_prompt_instructions') || "";
+        let serverPromptPersistenceAvailable = false;
         let savedScrollSpeed = parseFloat(localStorage.getItem('voxscribe_scroll_speed') || '1');
         if (!Number.isFinite(savedScrollSpeed) || savedScrollSpeed < 0.5 || savedScrollSpeed > 4) savedScrollSpeed = 1;
         let savedRemoteOllamas = loadRemoteOllamas();
@@ -566,6 +567,45 @@
         geminiKeySelect.value = activeGeminiKeySlot;
         promptInstructionsInput.value = savedPromptInstructions || defaultSystemPrompt;
         scrollSpeedInput.value = savedScrollSpeed;
+
+        function normalizePromptInstructions(promptInstructions) {
+            const trimmedPrompt = (promptInstructions || '').trim();
+            return trimmedPrompt === defaultSystemPrompt ? '' : trimmedPrompt;
+        }
+
+        async function fetchServerPromptInstructions() {
+            try {
+                const response = await fetch('/api/prompt', { cache: 'no-store' });
+                if (!response.ok) throw new Error();
+                const config = await response.json();
+                serverPromptPersistenceAvailable = true;
+                savedPromptInstructions = normalizePromptInstructions(config.prompt || '');
+                if (savedPromptInstructions) {
+                    localStorage.setItem('voxscribe_prompt_instructions', savedPromptInstructions);
+                } else {
+                    localStorage.removeItem('voxscribe_prompt_instructions');
+                }
+                promptInstructionsInput.value = savedPromptInstructions || defaultSystemPrompt;
+            } catch (error) {
+                serverPromptPersistenceAvailable = false;
+            }
+        }
+
+        async function saveServerPromptInstructions(promptInstructions) {
+            if (!serverPromptPersistenceAvailable) return false;
+            try {
+                const response = await fetch('/api/prompt', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: promptInstructions })
+                });
+                if (!response.ok) throw new Error();
+                return true;
+            } catch (error) {
+                serverPromptPersistenceAvailable = false;
+                return false;
+            }
+        }
 
         function getScrollSpeedLabel(speed) {
             if (speed === 1) return 'Normal';
@@ -810,7 +850,7 @@
 
         async function initializeAiBackends() {
             renderRemoteOllamaSelect();
-            await fetchServerAiConfig();
+            await Promise.all([fetchServerAiConfig(), fetchServerPromptInstructions()]);
             await fetchOllamaModels();
             updateGeminiOptionVisibility();
         }
@@ -1548,16 +1588,19 @@
             await fetchOllamaModels();
         });
 
-        openSettings.addEventListener('click', () => settingsModal.classList.remove('hidden'));
+        openSettings.addEventListener('click', async () => {
+            await fetchServerPromptInstructions();
+            settingsModal.classList.remove('hidden');
+        });
         closeSettings.addEventListener('click', () => settingsModal.classList.add('hidden'));
-        saveSettings.addEventListener('click', () => {
+        saveSettings.addEventListener('click', async () => {
             savedApiKeyNames = {
                 primary: apiKeyNameInputPrimary.value.trim() || defaultApiKeyNames.primary,
                 secondary: apiKeyNameInputSecondary.value.trim() || defaultApiKeyNames.secondary
             };
             activeGeminiKeySlot = geminiKeySelect.value;
             const promptInstructions = promptInstructionsInput.value.trim();
-            savedPromptInstructions = promptInstructions === defaultSystemPrompt ? "" : promptInstructions;
+            savedPromptInstructions = normalizePromptInstructions(promptInstructions);
             localStorage.removeItem('voxscribe_gemini_key_primary');
             localStorage.removeItem('voxscribe_gemini_key_secondary');
             localStorage.setItem('voxscribe_gemini_key_name_primary', savedApiKeyNames.primary);
@@ -1570,11 +1613,12 @@
             } else {
                 localStorage.removeItem('voxscribe_prompt_instructions');
             }
+            const promptSavedOnServer = await saveServerPromptInstructions(savedPromptInstructions);
             promptInstructionsInput.value = savedPromptInstructions || defaultSystemPrompt;
             scrollSpeedInput.value = savedScrollSpeed;
             updateGeminiOptionVisibility();
             settingsModal.classList.add('hidden');
-            toastMsg.innerText = "Settings Saved";
+            toastMsg.innerText = promptSavedOnServer ? "Settings Saved" : "Settings Saved Locally";
             toast.style.opacity = '1';
             setTimeout(() => toast.style.opacity = '0', 2000);
         });
