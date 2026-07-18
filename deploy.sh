@@ -372,14 +372,24 @@ DOCKER_RUN_ARGS=(
   --restart unless-stopped
 )
 
+warn_missing_piper_config() {
+  local model_path=$1
+  if [ ! -f "${model_path}.json" ]; then
+    echo "Warning: Piper model config was not found at ${model_path}.json."
+    echo "         Piper custom voices usually require the matching .onnx.json file beside the .onnx model."
+  fi
+}
+
 if [ -n "${PIPER_MODEL:-}" ]; then
   if [ -f "${PIPER_MODEL}" ]; then
     PIPER_MODEL_HOST_PATH="$(cd "$(dirname "${PIPER_MODEL}")" && pwd)/$(basename "${PIPER_MODEL}")"
+    warn_missing_piper_config "${PIPER_MODEL_HOST_PATH}"
     DOCKER_RUN_ARGS+=(
       -v "$(dirname "${PIPER_MODEL_HOST_PATH}"):/custom_voice:ro"
       -e "PIPER_MODEL=/custom_voice/$(basename "${PIPER_MODEL_HOST_PATH}")"
     )
   elif [[ "${PIPER_MODEL}" == /custom_voice/* && -f "${SCRIPT_DIR}${PIPER_MODEL}" ]]; then
+    warn_missing_piper_config "${SCRIPT_DIR}${PIPER_MODEL}"
     DOCKER_RUN_ARGS+=(
       -v "${SCRIPT_DIR}/custom_voice:/custom_voice:ro"
       -e "PIPER_MODEL=${PIPER_MODEL}"
@@ -389,6 +399,12 @@ if [ -n "${PIPER_MODEL:-}" ]; then
     echo "Warning: PIPER_MODEL is set to '${PIPER_MODEL}', but deploy.sh could not find that model file on the host."
     echo "         Mount the model yourself or set PIPER_MODEL to a host .onnx path so deploy.sh can mount it."
   fi
+elif [ -f "${SCRIPT_DIR}/custom_voice/my_voice.onnx" ]; then
+  warn_missing_piper_config "${SCRIPT_DIR}/custom_voice/my_voice.onnx"
+  DOCKER_RUN_ARGS+=(
+    -v "${SCRIPT_DIR}/custom_voice:/custom_voice:ro"
+    -e PIPER_MODEL="/custom_voice/my_voice.onnx"
+  )
 fi
 
 echo "Starting container..."
