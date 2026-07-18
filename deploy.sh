@@ -124,6 +124,24 @@ function send(res, status, headers, body) {
   res.end(body);
 }
 
+function readRequestBody(req, limit = 12 * 1024 * 1024) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on('data', chunk => {
+      size += chunk.length;
+      if (size > limit) {
+        reject(new Error('Request body too large'));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
 function readJsonBody(req, limit = 1024 * 1024) {
   return new Promise((resolve, reject) => {
     let body = '';
@@ -239,6 +257,43 @@ async function proxyGemini(req, res, url) {
   }
 }
 
+
+async function proxyStt(req, res, url) {
+  if (req.method !== 'POST') return send(res, 405, { 'Content-Type': 'text/plain' }, 'Method not allowed');
+  const apiKey = geminiKeys.primary || geminiKeys.secondary;
+  if (!apiKey) return send(res, 503, { 'Content-Type': 'text/plain' }, 'Gemini API key is not configured on the server');
+
+  try {
+    const audio = await readRequestBody(req);
+    if (!audio.length) return send(res, 400, { 'Content-Type': 'text/plain' }, 'Missing audio');
+    const requestedMime = (url.searchParams.get('mime') || req.headers['content-type'] || 'audio/webm').split(';')[0];
+    const mimeType = ['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg', 'audio/wav'].includes(requestedMime) ? requestedMime : 'audio/webm';
+    const language = (url.searchParams.get('lang') || 'en-GB').slice(0, 16);
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const requestBody = {
+      contents: [{
+        role: 'user',
+        parts: [
+          { text: `Transcribe this ${language} speech audio. Return only the spoken words, with no commentary.` },
+          { inlineData: { mimeType, data: audio.toString('base64') } }
+        ]
+      }]
+    };
+    const upstream = await fetch(geminiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody)
+    });
+    const data = await upstream.json().catch(() => ({}));
+    if (!upstream.ok) return send(res, upstream.status, { 'Content-Type': 'text/plain' }, data.error?.message || 'Gemini STT failed');
+    const text = data.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('').trim() || '';
+    return send(res, 200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, JSON.stringify({ text }));
+  } catch (error) {
+    console.error(error);
+    return send(res, 500, { 'Content-Type': 'text/plain' }, 'STT proxy failed');
+  }
+}
+
 http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
@@ -246,6 +301,7 @@ http.createServer((req, res) => {
     return send(res, 200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, JSON.stringify({
       geminiKeys: { primary: Boolean(geminiKeys.primary), secondary: Boolean(geminiKeys.secondary) },
       ollamaProxy: true,
+      stt: Boolean(geminiKeys.primary || geminiKeys.secondary),
       defaultOllamaEndpoint
     }));
   }
@@ -256,6 +312,10 @@ http.createServer((req, res) => {
 
   if (url.pathname === '/api/ollama') {
     return proxyOllama(req, res, url);
+  }
+
+  if (url.pathname === '/api/stt') {
+    return proxyStt(req, res, url);
   }
 
   if (url.pathname === '/api/tts') {
@@ -422,7 +482,9 @@ echo "URL: http://localhost:${PORT_ARG}/"
 echo "App file: http://localhost:${PORT_ARG}/index.html"
 echo "Local TTS: http://localhost:${PORT_ARG}/api/tts
 Gemini proxy: http://localhost:${PORT_ARG}/api/gemini
-Ollama proxy: http://localhost:${PORT_ARG}/api/ollama (defaults host Ollama to ${OLLAMA_ENDPOINT:-http://host.docker.internal:11434})
+Ollama proxy: http://localhost:${PORT_ARG}/api/ollama
+Server STT fallback: http://localhost:${PORT_ARG}/api/stt
+Ollama defaults host Ollama to ${OLLAMA_ENDPOINT:-http://host.docker.internal:11434}
 Gemini keys: set GEMINI_API_KEY, GEMINI_API_KEY_PRIMARY, or GEMINI_API_KEY_SECONDARY before running deploy.sh
 eSpeak, a default UK English local Piper voice, and Kokoro-82M are bundled. Override PIPER_MODEL to use a mounted Piper .onnx voice model, or KOKORO_MODEL/KOKORO_VOICES/KOKORO_VOICE for Kokoro."
 echo "========================================="

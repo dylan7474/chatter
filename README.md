@@ -6,7 +6,7 @@ It captures speech from your microphone, sends conversation context to an AI bac
 ## What this application is
 
 - **Single-page web app** built as a lightweight `index.html` frontend plus an optional container-hosted API proxy.
-- **Speech-driven chat experience** using browser speech recognition + speech synthesis.
+- **Speech-driven chat experience** using browser speech recognition + speech synthesis, with a server-side speech-to-text fallback for mobile browsers when deployed with a Gemini key.
 - **Hybrid AI backend support** for:
   - **Gemini (cloud)** via a server-side/container API key proxy.
   - **Ollama models** discovered through the container-hosted Ollama proxy or, when opened as a plain static file/site, directly from your browser.
@@ -38,6 +38,7 @@ GEMINI_API_KEY=your_key_here ./deploy.sh 3014
 - The bundled Gemini proxy is available at `http://localhost:<port>/api/gemini`. Set `GEMINI_API_KEY` for one key, or `GEMINI_API_KEY_PRIMARY` and `GEMINI_API_KEY_SECONDARY` for two selectable server-side keys. Optionally set `GEMINI_MODEL` to override the default Gemini model.
 - The bundled Ollama proxy is available at `http://localhost:<port>/api/ollama`. It lets phone/tablet browsers use Ollama servers reachable from the container/host network instead of requiring the browser device to reach Ollama directly. The default local Ollama address is `http://host.docker.internal:11434`; override it with `OLLAMA_ENDPOINT=http://192.168.1.20:11434 ./deploy.sh 3014` if needed.
 - The bundled local TTS endpoint is available at `http://localhost:<port>/api/tts` and is used when **TTS: Local eSpeak**, **TTS: Local Piper**, or **TTS: Local Kokoro-82M** is selected in the app.
+- The bundled server-side speech-to-text fallback is available at `http://localhost:<port>/api/stt` when a Gemini key is configured. It lets mobile browsers that do not support Web Speech Recognition record short audio clips and transcribe them through the hosting server.
 - **TTS: Local Piper** uses the same endpoint with `engine=piper`. The container includes a default `en_GB-southern_english_female-low` Piper voice. To use a custom Piper voice, set `PIPER_MODEL` to a host `.onnx` file path before running `deploy.sh`; the script mounts that file's directory read-only at `/custom_voice` and points the container at the mounted model. For example: `PIPER_MODEL=/home/me/voices/my_voice.onnx ./deploy.sh 3014`. Keep the matching `.onnx.json` config file beside the model file. As shortcuts, placing `my_voice.onnx` and `my_voice.onnx.json` in the repo root, or placing them under `custom_voice/`, automatically mounts the voice and sets `PIPER_MODEL=/custom_voice/my_voice.onnx`; do not hard-code `-e PIPER_MODEL=/custom_voice/my_voice.onnx` unless you also mount the directory.
 - **TTS: Local Kokoro-82M** uses the same endpoint with `engine=kokoro`. The container downloads Kokoro ONNX model files during build; set `KOKORO_MODEL`, `KOKORO_VOICES`, or `KOKORO_VOICE` to use mounted Kokoro files or a different voice.
 - Local Piper and Kokoro responses are synthesized with in-memory request de-duplication and an LRU audio cache (default `TTS_CACHE_ENTRIES=128`) so repeated chunks return immediately and concurrent identical requests share one synthesis job.
@@ -63,7 +64,7 @@ GEMINI_API_KEY=your_key_here ./deploy.sh 3014
   locally via `http://localhost:<port>`.
 
 - **Phone browser hears audio but no transcript appears**:
-  make sure the page is opened in a browser with Web Speech Recognition support, such as Chrome on Android. Mobile browsers can be slower to mark speech as final, so Chatter displays and submits the latest partial recognition text when final text is not provided.
+  run the app through `deploy.sh` with `GEMINI_API_KEY`, `GEMINI_API_KEY_PRIMARY`, or `GEMINI_API_KEY_SECONDARY` configured. Chatter first uses browser speech recognition where available, then falls back to recording short audio clips and sending them to `/api/stt` for server-side Gemini transcription on mobile browsers that do not provide reliable Web Speech Recognition. The page must still be served from HTTPS, or from `http://localhost:<port>` during local testing, so the browser can grant microphone access.
 
 - **Ollama is unreachable when deployed with `deploy.sh`**:
   confirm the address is reachable from the container/host network. For Ollama running on the Docker host, use the default `http://host.docker.internal:11434` or set `OLLAMA_ENDPOINT` before running `deploy.sh`. For another LAN server, save its address in Settings, for example `http://192.168.1.20:11434`. The remote Ollama service may need `OLLAMA_HOST=0.0.0.0:11434`.

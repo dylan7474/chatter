@@ -260,6 +260,9 @@
         let finalTranscript = '';
         let pendingRecognitionTranscript = '';
         let recognition = null;
+        let mediaRecorder = null;
+        let mediaRecorderChunks = [];
+        let serverSttTimer = null;
         let chatHistory = [];
         let isAITalking = false;
         
@@ -318,6 +321,7 @@
         const defaultApiKeyNames = { primary: 'Key 1', secondary: 'Key 2' };
         let serverGeminiKeys = { primary: false, secondary: false };
         let serverOllamaProxyAvailable = false;
+        let serverSttAvailable = false;
         let defaultOllamaEndpoint = 'http://127.0.0.1:11434';
         let savedApiKeyNames = {
             primary: localStorage.getItem('voxscribe_gemini_key_name_primary') || defaultApiKeyNames.primary,
@@ -339,7 +343,7 @@
 
         languageSelect.addEventListener('change', () => {
             localStorage.setItem('voxscribe_language', languageSelect.value);
-            if (sessionActive) { 
+            if (sessionActive && recognition) {
                 recognition.stop(); 
                 setTimeout(() => { recognition.lang = languageSelect.value; recognition.start(); }, 400); 
             } 
@@ -548,10 +552,12 @@
                 const config = await response.json();
                 serverGeminiKeys = config.geminiKeys || serverGeminiKeys;
                 serverOllamaProxyAvailable = Boolean(config.ollamaProxy);
+                serverSttAvailable = Boolean(config.stt);
                 defaultOllamaEndpoint = config.defaultOllamaEndpoint || defaultOllamaEndpoint;
             } catch (error) {
                 serverGeminiKeys = { primary: false, secondary: false };
                 serverOllamaProxyAvailable = false;
+                serverSttAvailable = false;
                 defaultOllamaEndpoint = 'http://127.0.0.1:11434';
             }
             updateGeminiOptionVisibility();
@@ -710,19 +716,103 @@
                 console.error('Recognition error:', event.error);
                 if (event.error === 'not-allowed') {
                     showError("Mic permission blocked. Check URL bar Shield/Lock icon.");
+                    stopSession();
+                    return;
+                }
+                if (canUseServerSttFallback() && ['network', 'service-not-allowed', 'audio-capture'].includes(event.error)) {
+                    recognition = null;
+                    startServerSttRecording();
+                    return;
                 }
                 stopSession();
             };
 
             recognition.onend = () => {
                 if (sessionActive && !isAITalking) {
-                    try { recognition.start(); } catch(e) {}
+                    try { recognition.start(); }
+                    catch(e) {
+                        if (canUseServerSttFallback()) {
+                            recognition = null;
+                            startServerSttRecording();
+                        }
+                    }
                 } else {
                     stopVisualizer();
                     isRecording = false;
                     updateUI();
                 }
             };
+        }
+
+
+
+        function getBestRecorderMimeType() {
+            const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
+            return types.find(type => window.MediaRecorder && MediaRecorder.isTypeSupported(type)) || '';
+        }
+
+        function canUseServerSttFallback() {
+            return Boolean(serverSttAvailable && window.MediaRecorder);
+        }
+
+        async function transcribeAudioOnServer(audioBlob) {
+            const response = await fetch(`/api/stt?lang=${encodeURIComponent(languageSelect.value)}&mime=${encodeURIComponent(audioBlob.type || 'audio/webm')}`, {
+                method: 'POST',
+                headers: { 'Content-Type': audioBlob.type || 'application/octet-stream' },
+                body: audioBlob
+            });
+            if (!response.ok) throw new Error(await response.text() || `STT service returned HTTP ${response.status}`);
+            const data = await response.json();
+            return (data.text || '').trim();
+        }
+
+        async function stopServerSttRecording(submitAudio = true) {
+            clearTimeout(serverSttTimer);
+            serverSttTimer = null;
+            if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+            mediaRecorder.onstop = async () => {
+                const chunks = mediaRecorderChunks;
+                mediaRecorderChunks = [];
+                isRecording = false;
+                stopVisualizer();
+                updateUI();
+                if (!submitAudio || !sessionActive || isAITalking || !chunks.length) return;
+                try {
+                    statusText.innerText = 'Transcribing...';
+                    const audioBlob = new Blob(chunks, { type: mediaRecorder.mimeType || getBestRecorderMimeType() || 'audio/webm' });
+                    const text = await transcribeAudioOnServer(audioBlob);
+                    if (text) handleUserMessage(text);
+                    else if (sessionActive && !isAITalking) startServerSttRecording();
+                } catch (error) {
+                    console.error('Server STT failed:', error);
+                    showError(`Server speech-to-text failed: ${error.message}`);
+                    stopSession();
+                }
+            };
+            mediaRecorder.stop();
+        }
+
+        async function startServerSttRecording() {
+            if (!canUseServerSttFallback()) {
+                showError('Speech recognition is not available in this browser. Deploy with a server-side Gemini key to enable mobile speech-to-text fallback, or use the text input.');
+                return;
+            }
+            const stream = await getPersistentMicStream();
+            if (!stream || !sessionActive || isAITalking) return;
+            mediaRecorderChunks = [];
+            const mimeType = getBestRecorderMimeType();
+            mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+            mediaRecorder.ondataavailable = event => { if (event.data && event.data.size) mediaRecorderChunks.push(event.data); };
+            mediaRecorder.onerror = event => {
+                console.error('MediaRecorder error:', event.error);
+                showError('Could not record audio for server speech-to-text. Check browser microphone permissions.');
+                stopSession();
+            };
+            mediaRecorder.start();
+            isRecording = true;
+            updateUI();
+            startVisualizer(stream);
+            serverSttTimer = setTimeout(() => stopServerSttRecording(true), 5000);
         }
 
         function updateCurrentTranscriptUI(interim = '') {
@@ -1021,7 +1111,11 @@
                     isAITalking = false;
                     statusDot.classList.remove('recording-pulse');
                     if (sessionActive) {
-                        try { recognition.start(); } catch (e) {}
+                        if (recognition) {
+                            try { recognition.start(); } catch (e) {}
+                        } else if (canUseServerSttFallback()) {
+                            startServerSttRecording();
+                        }
                         updateUI();
                     }
                 }, 1000);
@@ -1176,14 +1270,28 @@
             if (synth.speaking) synth.cancel();
             finalTranscript = '';
             pendingRecognitionTranscript = '';
-            recognition.lang = languageSelect.value;
             sessionActive = true;
-            try { recognition.start(); } catch (e) {}
+            if (recognition) {
+                recognition.lang = languageSelect.value;
+                try { recognition.start(); }
+                catch (e) {
+                    if (canUseServerSttFallback()) {
+                        recognition = null;
+                        await startServerSttRecording();
+                    } else {
+                        showError('Speech recognition could not start in this browser. Try Chrome/Edge, or deploy with a server-side Gemini key for mobile speech-to-text fallback.');
+                        stopSession();
+                    }
+                }
+            } else {
+                await startServerSttRecording();
+            }
         }
 
         function stopSession() {
             sessionActive = false;
             if (recognition) recognition.stop();
+            stopServerSttRecording(false);
             if (synth.speaking) synth.cancel();
             pendingTtsAudio.forEach(url => URL.revokeObjectURL(url));
             pendingTtsAudio.clear();
