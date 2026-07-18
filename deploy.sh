@@ -50,15 +50,66 @@ const kokoroVoice = process.env.KOKORO_VOICE || 'bf_emma';
 const tmpDir = fs.existsSync('/dev/shm') ? '/dev/shm' : '/tmp';
 const dataDir = process.env.CHATTER_DATA_DIR || '/app/data';
 const promptFile = `${dataDir}/prompt.json`;
+const geminiKeyFile = `${dataDir}/gemini-keys.json`;
 const ttsCache = new Map();
 const inFlightTts = new Map();
 const maxCacheEntries = Number(process.env.TTS_CACHE_ENTRIES || 128);
 const geminiModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 const defaultOllamaEndpoint = process.env.OLLAMA_ENDPOINT || 'http://host.docker.internal:11434';
-const geminiKeys = {
-  primary: process.env.GEMINI_API_KEY_PRIMARY || process.env.GEMINI_API_KEY || '',
-  secondary: process.env.GEMINI_API_KEY_SECONDARY || ''
-};
+let geminiKeyConfig = readStoredGeminiKeys();
+let geminiKeys = geminiKeyConfig.keys;
+
+
+function normalizeGeminiKeyConfig(config = {}) {
+  const envPrimary = process.env.GEMINI_API_KEY_PRIMARY || process.env.GEMINI_API_KEY || '';
+  const envSecondary = process.env.GEMINI_API_KEY_SECONDARY || '';
+  const keys = config.keys || {};
+  const names = config.names || config.geminiKeyNames || {};
+  const activeSlot = config.activeSlot === 'secondary' ? 'secondary' : 'primary';
+  return {
+    keys: {
+      primary: String(keys.primary || envPrimary || ''),
+      secondary: String(keys.secondary || envSecondary || '')
+    },
+    names: {
+      primary: String(names.primary || 'Key 1').trim().slice(0, 80) || 'Key 1',
+      secondary: String(names.secondary || 'Key 2').trim().slice(0, 80) || 'Key 2'
+    },
+    activeSlot
+  };
+}
+
+function readStoredGeminiKeys() {
+  try {
+    return normalizeGeminiKeyConfig(JSON.parse(fs.readFileSync(geminiKeyFile, 'utf8')));
+  } catch (error) {
+    return normalizeGeminiKeyConfig({});
+  }
+}
+
+function publicGeminiKeyConfig() {
+  return {
+    geminiKeys: { primary: Boolean(geminiKeys.primary), secondary: Boolean(geminiKeys.secondary) },
+    geminiKeyNames: geminiKeyConfig.names,
+    activeGeminiKeySlot: geminiKeyConfig.activeSlot
+  };
+}
+
+function writeStoredGeminiKeys(config = {}) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  const next = normalizeGeminiKeyConfig({
+    keys: {
+      primary: typeof config.keys?.primary === 'string' && config.keys.primary.trim() ? config.keys.primary.trim() : geminiKeys.primary,
+      secondary: typeof config.keys?.secondary === 'string' && config.keys.secondary.trim() ? config.keys.secondary.trim() : geminiKeys.secondary
+    },
+    names: config.names,
+    activeSlot: config.activeSlot
+  });
+  fs.writeFileSync(geminiKeyFile, JSON.stringify({ ...next, updatedAt: new Date().toISOString() }, null, 2), { mode: 0o600 });
+  geminiKeyConfig = next;
+  geminiKeys = next.keys;
+  return publicGeminiKeyConfig();
+}
 
 function cacheKey(engine, voice, text) {
   return crypto.createHash('sha256').update(`${engine}\0${voice}\0${text}`).digest('hex');
@@ -284,10 +335,23 @@ http.createServer((req, res) => {
 
   if (url.pathname === '/api/config') {
     return send(res, 200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, JSON.stringify({
-      geminiKeys: { primary: Boolean(geminiKeys.primary), secondary: Boolean(geminiKeys.secondary) },
+      ...publicGeminiKeyConfig(),
+      geminiKeyPersistence: true,
       ollamaProxy: true,
       defaultOllamaEndpoint
     }));
+  }
+
+
+  if (url.pathname === '/api/gemini-keys') {
+    if (req.method !== 'PUT') return send(res, 405, { 'Content-Type': 'text/plain' }, 'Method not allowed');
+    readJsonBody(req, 32 * 1024)
+      .then(body => {
+        const savedKeys = writeStoredGeminiKeys(body);
+        send(res, 200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, JSON.stringify(savedKeys));
+      })
+      .catch(error => send(res, 400, { 'Content-Type': 'text/plain' }, error.message));
+    return;
   }
 
   if (url.pathname === '/api/prompt') {
@@ -482,6 +546,6 @@ echo "App file: http://localhost:${PORT_ARG}/index.html"
 echo "Local TTS: http://localhost:${PORT_ARG}/api/tts
 Gemini proxy: http://localhost:${PORT_ARG}/api/gemini
 Ollama proxy: http://localhost:${PORT_ARG}/api/ollama (defaults host Ollama to ${OLLAMA_ENDPOINT:-http://host.docker.internal:11434})
-Gemini keys: set GEMINI_API_KEY, GEMINI_API_KEY_PRIMARY, or GEMINI_API_KEY_SECONDARY before running deploy.sh
+Gemini keys: enter keys in Settings to save them on the shared Docker volume, or seed them with GEMINI_API_KEY, GEMINI_API_KEY_PRIMARY, or GEMINI_API_KEY_SECONDARY before running deploy.sh
 eSpeak, a default UK English local Piper voice, and Kokoro-82M are bundled. Override PIPER_MODEL to use a mounted Piper .onnx voice model, or KOKORO_MODEL/KOKORO_VOICES/KOKORO_VOICE for Kokoro."
 echo "========================================="
