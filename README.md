@@ -62,6 +62,9 @@ GEMINI_API_KEY=your_key_here ./deploy.sh 3014
   (for example `https://ebg.dylanjones.org:3014` if you are still using that port), or run
   locally via `http://localhost:<port>`.
 
+- **Phone browser hears audio but no transcript appears**:
+  make sure the page is opened in a browser with Web Speech Recognition support, such as Chrome on Android. Mobile browsers can be slower to mark speech as final, so Chatter displays and submits the latest partial recognition text when final text is not provided.
+
 - **Ollama is unreachable when deployed with `deploy.sh`**:
   confirm the address is reachable from the container/host network. For Ollama running on the Docker host, use the default `http://host.docker.internal:11434` or set `OLLAMA_ENDPOINT` before running `deploy.sh`. For another LAN server, save its address in Settings, for example `http://192.168.1.20:11434`. The remote Ollama service may need `OLLAMA_HOST=0.0.0.0:11434`.
 
