@@ -48,6 +48,8 @@ const kokoroModel = process.env.KOKORO_MODEL || '/app/kokoro/kokoro-v1.0.onnx';
 const kokoroVoices = process.env.KOKORO_VOICES || '/app/kokoro/voices-v1.0.bin';
 const kokoroVoice = process.env.KOKORO_VOICE || 'bf_emma';
 const tmpDir = fs.existsSync('/dev/shm') ? '/dev/shm' : '/tmp';
+const dataDir = process.env.CHATTER_DATA_DIR || '/app/data';
+const promptFile = `${dataDir}/prompt.json`;
 const ttsCache = new Map();
 const inFlightTts = new Map();
 const maxCacheEntries = Number(process.env.TTS_CACHE_ENTRIES || 128);
@@ -122,6 +124,20 @@ async function synthesizeCached(key, synthesize) {
 function send(res, status, headers, body) {
   res.writeHead(status, headers);
   res.end(body);
+}
+
+function readStoredPrompt() {
+  try {
+    const saved = JSON.parse(fs.readFileSync(promptFile, 'utf8'));
+    return typeof saved.prompt === 'string' ? saved.prompt : '';
+  } catch (error) {
+    return '';
+  }
+}
+
+function writeStoredPrompt(prompt) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(promptFile, JSON.stringify({ prompt, updatedAt: new Date().toISOString() }, null, 2));
 }
 
 function readJsonBody(req, limit = 1024 * 1024) {
@@ -250,6 +266,26 @@ http.createServer((req, res) => {
     }));
   }
 
+  if (url.pathname === '/api/prompt') {
+    if (req.method === 'GET') {
+      return send(res, 200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, JSON.stringify({ prompt: readStoredPrompt() }));
+    }
+
+    if (req.method === 'PUT') {
+      readJsonBody(req, 16 * 1024)
+        .then(body => {
+          const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
+          const savedPrompt = prompt.slice(0, 8000);
+          writeStoredPrompt(savedPrompt);
+          send(res, 200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, JSON.stringify({ prompt: savedPrompt }));
+        })
+        .catch(error => send(res, 400, { 'Content-Type': 'text/plain' }, error.message));
+      return;
+    }
+
+    return send(res, 405, { 'Content-Type': 'text/plain' }, 'Method not allowed');
+  }
+
   if (url.pathname === '/api/gemini') {
     return proxyGemini(req, res, url);
   }
@@ -357,6 +393,7 @@ docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
 DOCKER_RUN_ARGS=(
   --name "${CONTAINER_NAME}"
   -p "${PORT_ARG}:${PORT_ARG}"
+  -v "${CONTAINER_NAME}-data:/app/data"
   -e PORT="${PORT_ARG}"
   -e GEMINI_API_KEY
   -e GEMINI_API_KEY_PRIMARY
