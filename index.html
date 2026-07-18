@@ -446,7 +446,7 @@
                         <label class="text-xs font-bold text-slate-500 uppercase tracking-widest block" for="scrollSpeedInput">Scroller speed</label>
                         <span id="scrollSpeedValue" class="text-sm font-bold text-cyan-300">Normal</span>
                     </div>
-                    <input id="scrollSpeedInput" type="range" min="0.5" max="2" step="0.25" value="1" class="w-full accent-indigo-500">
+                    <input id="scrollSpeedInput" type="range" min="0.5" max="4" step="0.25" value="1" class="w-full accent-indigo-500">
                     <div class="flex justify-between text-xs text-slate-500 mt-2" aria-hidden="true">
                         <span>Slower</span>
                         <span>Faster</span>
@@ -557,7 +557,7 @@
         if (!['primary', 'secondary'].includes(activeGeminiKeySlot)) activeGeminiKeySlot = 'primary';
         let savedPromptInstructions = localStorage.getItem('voxscribe_prompt_instructions') || "";
         let savedScrollSpeed = parseFloat(localStorage.getItem('voxscribe_scroll_speed') || '1');
-        if (!Number.isFinite(savedScrollSpeed) || savedScrollSpeed < 0.5 || savedScrollSpeed > 2) savedScrollSpeed = 1;
+        if (!Number.isFinite(savedScrollSpeed) || savedScrollSpeed < 0.5 || savedScrollSpeed > 4) savedScrollSpeed = 1;
         let savedRemoteOllamas = loadRemoteOllamas();
         apiKeyInputPrimary.value = 'Configured on hosting server';
         apiKeyInputSecondary.value = 'Configured on hosting server';
@@ -936,18 +936,16 @@
                 }
 
                 clearTimeout(silenceTimer);
-                let interimTranscript = '';
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
                     const transcript = event.results[i][0].transcript;
                     if (event.results[i].isFinal) {
                         finalTranscript += transcript + ' ';
-                    } else {
-                        interimTranscript += transcript;
                     }
                 }
                 
-                updateCurrentTranscriptUI(interimTranscript);
-
+                // Do not update or restart the marquee while speech is still
+                // being recognised. Waiting for the silence timeout avoids
+                // repeatedly kicking the scroller with partial transcripts.
                 // Start silence timer to trigger AI
                 silenceTimer = setTimeout(() => {
                     const text = finalTranscript.trim();
