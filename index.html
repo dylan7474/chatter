@@ -145,7 +145,7 @@
             padding-block: 0.25rem;
             padding-left: 100%;
             text-shadow: 0 0 10px currentColor, 0 0 22px currentColor, 0 0 42px rgba(34, 211, 238, 0.45);
-            animation: amigaTicker 18s linear 1 both;
+            animation: amigaTicker var(--scroll-duration, 18s) linear 1 both;
             will-change: transform;
         }
 
@@ -357,6 +357,18 @@
                         <option value="">No remote servers saved</option>
                     </select>
                 </div>
+                <div class="border border-slate-700/70 rounded-2xl p-4 bg-slate-900/30">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+                        <label class="text-xs font-bold text-slate-500 uppercase tracking-widest block" for="scrollSpeedInput">Scroller speed</label>
+                        <span id="scrollSpeedValue" class="text-sm font-bold text-cyan-300">Normal</span>
+                    </div>
+                    <input id="scrollSpeedInput" type="range" min="0.5" max="2" step="0.25" value="1" class="w-full accent-indigo-500">
+                    <div class="flex justify-between text-xs text-slate-500 mt-2" aria-hidden="true">
+                        <span>Slower</span>
+                        <span>Faster</span>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-2">Adjust how quickly each conversation marquee message crosses the display.</p>
+                </div>
                 <div>
                     <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="promptInstructionsInput">Prompt behaviour / personality</label>
                     <textarea id="promptInstructionsInput" rows="5" placeholder="Default friendly British chat style." class="w-full resize-y bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all custom-scrollbar"></textarea>
@@ -413,6 +425,8 @@
         const apiKeyNameInputPrimary = document.getElementById('apiKeyNameInputPrimary');
         const apiKeyNameInputSecondary = document.getElementById('apiKeyNameInputSecondary');
         const promptInstructionsInput = document.getElementById('promptInstructionsInput');
+        const scrollSpeedInput = document.getElementById('scrollSpeedInput');
+        const scrollSpeedValue = document.getElementById('scrollSpeedValue');
         const languageSelect = document.getElementById('languageSelect');
         const aiModelSelect = document.getElementById('aiModelSelect');
         const streamingToggle = document.getElementById('streamingToggle');
@@ -458,6 +472,8 @@
         let activeGeminiKeySlot = localStorage.getItem('voxscribe_gemini_key_active') || 'primary';
         if (!['primary', 'secondary'].includes(activeGeminiKeySlot)) activeGeminiKeySlot = 'primary';
         let savedPromptInstructions = localStorage.getItem('voxscribe_prompt_instructions') || "";
+        let savedScrollSpeed = parseFloat(localStorage.getItem('voxscribe_scroll_speed') || '1');
+        if (!Number.isFinite(savedScrollSpeed) || savedScrollSpeed < 0.5 || savedScrollSpeed > 2) savedScrollSpeed = 1;
         let savedRemoteOllamas = loadRemoteOllamas();
         apiKeyInputPrimary.value = 'Configured on hosting server';
         apiKeyInputSecondary.value = 'Configured on hosting server';
@@ -465,6 +481,21 @@
         apiKeyNameInputSecondary.value = savedApiKeyNames.secondary;
         geminiKeySelect.value = activeGeminiKeySlot;
         promptInstructionsInput.value = savedPromptInstructions || defaultSystemPrompt;
+        scrollSpeedInput.value = savedScrollSpeed;
+
+        function getScrollSpeedLabel(speed) {
+            if (speed === 1) return 'Normal';
+            return `${speed.toFixed(2).replace(/\.00$/, '').replace(/0$/, '')}x`;
+        }
+
+        function applyScrollSpeed(speed) {
+            savedScrollSpeed = speed;
+            const durationSeconds = 18 / speed;
+            document.documentElement.style.setProperty('--scroll-duration', `${durationSeconds}s`);
+            scrollSpeedValue.textContent = getScrollSpeedLabel(speed);
+        }
+
+        applyScrollSpeed(savedScrollSpeed);
 
         const savedLang = localStorage.getItem('voxscribe_language');
         if (savedLang) languageSelect.value = savedLang;
@@ -493,6 +524,10 @@
 
         ttsEngineSelect.addEventListener('change', () => {
             localStorage.setItem('voxscribe_tts_engine', ttsEngineSelect.value);
+        });
+
+        scrollSpeedInput.addEventListener('input', () => {
+            applyScrollSpeed(parseFloat(scrollSpeedInput.value));
         });
 
         geminiKeySelect.addEventListener('change', () => {
@@ -1426,6 +1461,7 @@
             localStorage.setItem('voxscribe_gemini_key_name_primary', savedApiKeyNames.primary);
             localStorage.setItem('voxscribe_gemini_key_name_secondary', savedApiKeyNames.secondary);
             localStorage.setItem('voxscribe_gemini_key_active', activeGeminiKeySlot);
+            localStorage.setItem('voxscribe_scroll_speed', String(savedScrollSpeed));
             localStorage.removeItem('voxscribe_gemini_key');
             if (savedPromptInstructions) {
                 localStorage.setItem('voxscribe_prompt_instructions', savedPromptInstructions);
@@ -1433,6 +1469,7 @@
                 localStorage.removeItem('voxscribe_prompt_instructions');
             }
             promptInstructionsInput.value = savedPromptInstructions || defaultSystemPrompt;
+            scrollSpeedInput.value = savedScrollSpeed;
             updateGeminiOptionVisibility();
             settingsModal.classList.add('hidden');
             toastMsg.innerText = "Settings Saved";
