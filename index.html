@@ -614,6 +614,10 @@
             }
         }
 
+        function isLikelyMobileChrome() {
+            return /Android/i.test(navigator.userAgent) && /Chrome\//i.test(navigator.userAgent);
+        }
+
         function startVisualizer(stream) {
             if (!stream) return;
             if (!audioContext) {
@@ -656,7 +660,12 @@
         function initRecognition() {
             if (!SpeechRecognition) return;
             recognition = new SpeechRecognition();
-            recognition.continuous = true; 
+            // Android Chrome's Web Speech recognizer is more reliable when it
+            // owns the microphone and restarts between utterances. Keeping
+            // getUserMedia open for the visualizer can block recognition on
+            // phones, so mobile Chrome uses one-shot recognition with onend
+            // restarts instead of continuous capture.
+            recognition.continuous = !isLikelyMobileChrome();
             recognition.interimResults = true;
             recognition.lang = languageSelect.value;
 
@@ -700,8 +709,12 @@
             recognition.onerror = (event) => {
                 if (event.error === 'no-speech' || event.error === 'aborted') return;
                 console.error('Recognition error:', event.error);
-                if (event.error === 'not-allowed') {
-                    showError("Mic permission blocked. Check URL bar Shield/Lock icon.");
+                if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                    showError("Mic permission blocked. Check the browser lock icon and Android app microphone permissions, then reload.");
+                } else if (event.error === 'audio-capture') {
+                    showError("Chrome could not start microphone capture. On phones, close other apps or tabs using the mic, then try again.");
+                } else if (event.error === 'network') {
+                    showError("Chrome speech recognition needs an internet connection on many phones. Check your connection, then try again.");
                 }
                 stopSession();
             };
@@ -1155,10 +1168,14 @@
                 showError(getMicAccessHelpMessage());
                 return;
             }
-            const stream = await getPersistentMicStream();
-            if (!stream) return;
+            const stream = isLikelyMobileChrome() ? null : await getPersistentMicStream();
+            if (!isLikelyMobileChrome() && !stream) return;
             if (synth.speaking) synth.cancel();
             finalTranscript = '';
+            if (!recognition) {
+                showError('Speech recognition is not supported in this browser. Try Chrome or use the text input instead.');
+                return;
+            }
             recognition.lang = languageSelect.value;
             sessionActive = true;
             try { recognition.start(); } catch (e) {}
