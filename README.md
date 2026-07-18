@@ -9,7 +9,7 @@ It captures speech from your microphone, sends conversation context to an AI bac
 - **Speech-driven chat experience** using browser speech recognition + speech synthesis.
 - **Hybrid AI backend support** for:
   - **Gemini (cloud)** via a server-side/container API key proxy.
-  - **Ollama models** discovered from your local machine or saved remote Ollama servers.
+  - **Ollama models** discovered through the container-hosted Ollama proxy or, when opened as a plain static file/site, directly from your browser.
 
 ## Build / run instructions
 
@@ -36,6 +36,7 @@ GEMINI_API_KEY=your_key_here ./deploy.sh 3014
 - Arg 1: exposed port (default `3014`)
 - Open `http://localhost:<port>/` or `http://localhost:<port>/index.html`.
 - The bundled Gemini proxy is available at `http://localhost:<port>/api/gemini`. Set `GEMINI_API_KEY` for one key, or `GEMINI_API_KEY_PRIMARY` and `GEMINI_API_KEY_SECONDARY` for two selectable server-side keys. Optionally set `GEMINI_MODEL` to override the default Gemini model.
+- The bundled Ollama proxy is available at `http://localhost:<port>/api/ollama`. It lets phone/tablet browsers use Ollama servers reachable from the container/host network instead of requiring the browser device to reach Ollama directly. The default local Ollama address is `http://host.docker.internal:11434`; override it with `OLLAMA_ENDPOINT=http://192.168.1.20:11434 ./deploy.sh 3014` if needed.
 - The bundled local TTS endpoint is available at `http://localhost:<port>/api/tts` and is used when **TTS: Local eSpeak**, **TTS: Local Piper**, or **TTS: Local Kokoro-82M** is selected in the app.
 - **TTS: Local Piper** uses the same endpoint with `engine=piper`. The container includes a default `en_GB-southern_english_female-low` Piper voice; set `PIPER_MODEL` to a mounted Piper `.onnx` voice model path if you want to override it.
 - **TTS: Local Kokoro-82M** uses the same endpoint with `engine=kokoro`. The container downloads Kokoro ONNX model files during build; set `KOKORO_MODEL`, `KOKORO_VOICES`, or `KOKORO_VOICE` to use mounted Kokoro files or a different voice.
@@ -50,7 +51,7 @@ GEMINI_API_KEY=your_key_here ./deploy.sh 3014
 - **Gemini key selector**: choose which server-configured Gemini API key slot Gemini cloud requests use. Key slot names can be customised in **Settings** (for example, “Billing” or “Free”); if the selected server slot is unavailable, the app falls back to the other configured server key.
 - **Stream tokens**: optionally render AI responses token-by-token as they arrive. With **TTS: Local eSpeak**, **TTS: Local Piper**, or **TTS: Local Kokoro-82M**, speech is queued in sentence or short phrase chunks as text streams in, so playback can start before the AI response is complete. Browser TTS still waits for the full response because browser speech synthesis does not accept incremental audio input.
 - **TTS selector**: choose browser speech synthesis, the deployed local eSpeak service, the deployed local Piper service, or the deployed local Kokoro-82M service. The local options require running the app through `deploy.sh`; the container bundles eSpeak, a default UK English Piper voice, and Kokoro-82M model files.
-- **Settings (gear icon)**: name the two server-configured Gemini key slots, choose the active Gemini key slot, add/update/remove named remote Ollama servers, and set optional prompt behaviour/personality instructions. Saved prompt instructions override the default friendly British chat style; leave the field blank to use the default. Remote Ollama addresses must include the protocol and port, such as `http://192.168.1.20:11434`.
+- **Settings (gear icon)**: name the two server-configured Gemini key slots, choose the active Gemini key slot, add/update/remove named remote Ollama servers, and set optional prompt behaviour/personality instructions. Saved prompt instructions override the default friendly British chat style; leave the field blank to use the default. When deployed with `deploy.sh`, remote Ollama addresses are reached by the hosting container through `/api/ollama`, so phone browsers can use host/container addresses such as `http://host.docker.internal:11434` or LAN addresses such as `http://192.168.1.20:11434`.
 - **Transcript panel**: shows conversation turns and current output.
 - **Text input box**: type a message and press **Send** (or Enter) as an alternative to speaking; use Shift+Enter for a new line.
 
@@ -61,8 +62,11 @@ GEMINI_API_KEY=your_key_here ./deploy.sh 3014
   (for example `https://ebg.dylanjones.org:3014` if you are still using that port), or run
   locally via `http://localhost:<port>`.
 
-- **Remote Ollama is unreachable from the browser**:
-  confirm the address is reachable from the device running the browser and that the remote Ollama service allows browser origins. Ollama may need `OLLAMA_HOST=0.0.0.0:11434` and an appropriate `OLLAMA_ORIGINS` setting on the remote computer.
+- **Ollama is unreachable when deployed with `deploy.sh`**:
+  confirm the address is reachable from the container/host network. For Ollama running on the Docker host, use the default `http://host.docker.internal:11434` or set `OLLAMA_ENDPOINT` before running `deploy.sh`. For another LAN server, save its address in Settings, for example `http://192.168.1.20:11434`. The remote Ollama service may need `OLLAMA_HOST=0.0.0.0:11434`.
+
+- **Remote Ollama is unreachable from a plain static server**:
+  if you are not using `deploy.sh`, the browser still contacts Ollama directly. Confirm the address is reachable from the device running the browser and that Ollama allows browser origins with an appropriate `OLLAMA_ORIGINS` setting.
 
 ## Roadmap (short)
 

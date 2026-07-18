@@ -52,6 +52,7 @@ const ttsCache = new Map();
 const inFlightTts = new Map();
 const maxCacheEntries = Number(process.env.TTS_CACHE_ENTRIES || 128);
 const geminiModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
+const defaultOllamaEndpoint = process.env.OLLAMA_ENDPOINT || 'http://host.docker.internal:11434';
 const geminiKeys = {
   primary: process.env.GEMINI_API_KEY_PRIMARY || process.env.GEMINI_API_KEY || '',
   secondary: process.env.GEMINI_API_KEY_SECONDARY || ''
@@ -144,6 +145,63 @@ function readJsonBody(req, limit = 1024 * 1024) {
   });
 }
 
+
+function normalizeOllamaEndpoint(endpoint) {
+  let parsed;
+  try {
+    parsed = new URL(endpoint);
+  } catch (error) {
+    throw new Error('Invalid Ollama endpoint');
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('Ollama endpoint must use http or https');
+  parsed.username = '';
+  parsed.password = '';
+  parsed.hash = '';
+  parsed.search = '';
+  return parsed;
+}
+
+async function proxyOllama(req, res, url) {
+  const allowedPaths = new Set(['/api/tags', '/api/chat']);
+  const path = url.searchParams.get('path') || '';
+  if (!allowedPaths.has(path)) return send(res, 400, { 'Content-Type': 'text/plain' }, 'Unsupported Ollama proxy path');
+  if (path === '/api/tags' && req.method !== 'GET') return send(res, 405, { 'Content-Type': 'text/plain' }, 'Method not allowed');
+  if (path === '/api/chat' && req.method !== 'POST') return send(res, 405, { 'Content-Type': 'text/plain' }, 'Method not allowed');
+
+  let upstreamUrl;
+  try {
+    const endpoint = normalizeOllamaEndpoint(url.searchParams.get('endpoint') || defaultOllamaEndpoint);
+    upstreamUrl = new URL(path, endpoint);
+  } catch (error) {
+    return send(res, 400, { 'Content-Type': 'text/plain' }, error.message);
+  }
+
+  try {
+    const headers = { 'Accept': req.headers.accept || 'application/json' };
+    let body;
+    if (req.method === 'POST') {
+      const requestBody = await readJsonBody(req);
+      headers['Content-Type'] = 'application/json';
+      body = JSON.stringify(requestBody);
+    }
+
+    const upstream = await fetch(upstreamUrl, { method: req.method, headers, body });
+    res.writeHead(upstream.status, {
+      'Content-Type': upstream.headers.get('content-type') || 'application/json',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff'
+    });
+    if (upstream.body) {
+      for await (const chunk of upstream.body) res.write(chunk);
+    }
+    res.end();
+  } catch (error) {
+    console.error(error);
+    if (!res.headersSent) send(res, 502, { 'Content-Type': 'text/plain' }, 'Ollama proxy failed');
+    else res.end();
+  }
+}
+
 async function proxyGemini(req, res, url) {
   if (req.method !== 'POST') return send(res, 405, { 'Content-Type': 'text/plain' }, 'Method not allowed');
   const slot = url.searchParams.get('slot') === 'secondary' ? 'secondary' : 'primary';
@@ -186,12 +244,18 @@ http.createServer((req, res) => {
 
   if (url.pathname === '/api/config') {
     return send(res, 200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, JSON.stringify({
-      geminiKeys: { primary: Boolean(geminiKeys.primary), secondary: Boolean(geminiKeys.secondary) }
+      geminiKeys: { primary: Boolean(geminiKeys.primary), secondary: Boolean(geminiKeys.secondary) },
+      ollamaProxy: true,
+      defaultOllamaEndpoint
     }));
   }
 
   if (url.pathname === '/api/gemini') {
     return proxyGemini(req, res, url);
+  }
+
+  if (url.pathname === '/api/ollama') {
+    return proxyOllama(req, res, url);
   }
 
   if (url.pathname === '/api/tts') {
@@ -299,6 +363,8 @@ docker run -d \
   -e GEMINI_API_KEY_PRIMARY \
   -e GEMINI_API_KEY_SECONDARY \
   -e GEMINI_MODEL \
+  -e OLLAMA_ENDPOINT \
+  --add-host=host.docker.internal:host-gateway \
   --restart unless-stopped \
   "${IMAGE_NAME}" >/dev/null
 
@@ -307,6 +373,8 @@ echo "Deployed ${PROJECT_NAME}."
 echo "URL: http://localhost:${PORT_ARG}/"
 echo "App file: http://localhost:${PORT_ARG}/index.html"
 echo "Local TTS: http://localhost:${PORT_ARG}/api/tts
-Gemini proxy: http://localhost:${PORT_ARG}/api/gemini (set GEMINI_API_KEY, GEMINI_API_KEY_PRIMARY, or GEMINI_API_KEY_SECONDARY before running deploy.sh)
+Gemini proxy: http://localhost:${PORT_ARG}/api/gemini
+Ollama proxy: http://localhost:${PORT_ARG}/api/ollama (defaults host Ollama to ${OLLAMA_ENDPOINT:-http://host.docker.internal:11434})
+Gemini keys: set GEMINI_API_KEY, GEMINI_API_KEY_PRIMARY, or GEMINI_API_KEY_SECONDARY before running deploy.sh
 eSpeak, a default UK English local Piper voice, and Kokoro-82M are bundled. Override PIPER_MODEL to use a mounted Piper .onnx voice model, or KOKORO_MODEL/KOKORO_VOICES/KOKORO_VOICE for Kokoro."
 echo "========================================="

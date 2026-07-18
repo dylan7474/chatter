@@ -207,7 +207,7 @@
                 </div>
                 <div class="border border-slate-700/70 rounded-2xl p-4 bg-slate-900/30">
                     <h4 class="text-sm font-bold text-white mb-2 flex items-center gap-2"><i class="fa-solid fa-server text-indigo-400"></i> Remote Ollama servers</h4>
-                    <p class="text-xs text-slate-500 mb-3">Add Ollama servers you can reach from this browser. Include the protocol and port, for example <code>http://192.168.1.20:11434</code>.</p>
+                    <p class="text-xs text-slate-500 mb-3">Add Ollama servers the hosting container can reach. Phone browsers use this app's server-side Ollama proxy, so you can use host/container addresses such as <code>http://host.docker.internal:11434</code> or LAN addresses like <code>http://192.168.1.20:11434</code>.</p>
                     <div class="grid gap-2 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
                         <div>
                             <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="remoteOllamaNameInput">Server name</label>
@@ -316,6 +316,8 @@
         const defaultSystemPrompt = "You are a friendly, natural British person having a casual spoken conversation. Keep your responses extremely brief (usually one sentence, max two). Speak casually and warmly. Avoid formal AI language, lists, or markdown. Just act like a mate chatting over tea.";
         const defaultApiKeyNames = { primary: 'Key 1', secondary: 'Key 2' };
         let serverGeminiKeys = { primary: false, secondary: false };
+        let serverOllamaProxyAvailable = false;
+        let defaultOllamaEndpoint = 'http://127.0.0.1:11434';
         let savedApiKeyNames = {
             primary: localStorage.getItem('voxscribe_gemini_key_name_primary') || defaultApiKeyNames.primary,
             secondary: localStorage.getItem('voxscribe_gemini_key_name_secondary') || defaultApiKeyNames.secondary
@@ -416,7 +418,7 @@
                 const [, remoteId] = selection.split(':');
                 return savedRemoteOllamas.find(remote => remote.id === remoteId)?.url || null;
             }
-            return 'http://127.0.0.1:11434';
+            return defaultOllamaEndpoint;
         }
 
         function getOllamaModelNameForSelection(selection) {
@@ -424,6 +426,19 @@
                 return selection.split(':').slice(2).join(':');
             }
             return selection.replace('ollama:', '');
+        }
+
+
+        function getOllamaProxyUrl(endpoint, path) {
+            const params = new URLSearchParams({ endpoint, path });
+            return `/api/ollama?${params.toString()}`;
+        }
+
+        async function fetchOllama(endpoint, path, options = {}) {
+            if (serverOllamaProxyAvailable) {
+                return fetch(getOllamaProxyUrl(endpoint, path), options);
+            }
+            return fetch(`${endpoint}${path}`, options);
         }
 
         function hasActiveGeminiServerKey() {
@@ -472,7 +487,7 @@
             try {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 2500);
-                const response = await fetch(`${endpoint}/api/tags`, { signal: controller.signal });
+                const response = await fetchOllama(endpoint, '/api/tags', { signal: controller.signal });
                 clearTimeout(timeoutId);
                 if (!response.ok) throw new Error();
                 const data = await response.json();
@@ -499,7 +514,7 @@
         }
 
         async function fetchOllamaModels() {
-            await populateOllamaGroup(ollamaGroup, 'http://127.0.0.1:11434', { errorText: 'Local Ollama unreachable' });
+            await populateOllamaGroup(ollamaGroup, defaultOllamaEndpoint, { errorText: serverOllamaProxyAvailable ? 'Host Ollama unreachable' : 'Local Ollama unreachable' });
 
             remoteOllamaGroup.innerHTML = '';
             if (!savedRemoteOllamas.length) {
@@ -531,16 +546,24 @@
                 if (!response.ok) throw new Error();
                 const config = await response.json();
                 serverGeminiKeys = config.geminiKeys || serverGeminiKeys;
+                serverOllamaProxyAvailable = Boolean(config.ollamaProxy);
+                defaultOllamaEndpoint = config.defaultOllamaEndpoint || defaultOllamaEndpoint;
             } catch (error) {
                 serverGeminiKeys = { primary: false, secondary: false };
+                serverOllamaProxyAvailable = false;
+                defaultOllamaEndpoint = 'http://127.0.0.1:11434';
             }
             updateGeminiOptionVisibility();
         }
 
-        renderRemoteOllamaSelect();
-        fetchServerAiConfig();
-        fetchOllamaModels();
-        updateGeminiOptionVisibility();
+        async function initializeAiBackends() {
+            renderRemoteOllamaSelect();
+            await fetchServerAiConfig();
+            await fetchOllamaModels();
+            updateGeminiOptionVisibility();
+        }
+
+        initializeAiBackends();
 
         function getSecureOriginHint() {
             const isLocalhost = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
@@ -1084,7 +1107,7 @@
 
                     if (shouldStreamTokens) {
                         const msgDiv = createAssistantMessageElement();
-                        const response = await fetchWithRetry(`${ollamaEndpoint}/api/chat`, {
+                        const response = await fetchWithRetry(serverOllamaProxyAvailable ? getOllamaProxyUrl(ollamaEndpoint, '/api/chat') : `${ollamaEndpoint}/api/chat`, {
                             method: 'POST',
                             headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
                             body: JSON.stringify(requestBody)
@@ -1092,7 +1115,7 @@
                         aiResponseText = await readOllamaStreamingResponse(response, msgDiv, queueStreamingSpeechChunk) || "No response.";
                         queueStreamingSpeechChunk('', true);
                     } else {
-                        const response = await fetchWithRetry(`${ollamaEndpoint}/api/chat`, {
+                        const response = await fetchWithRetry(serverOllamaProxyAvailable ? getOllamaProxyUrl(ollamaEndpoint, '/api/chat') : `${ollamaEndpoint}/api/chat`, {
                             method: 'POST',
                             headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
                             body: JSON.stringify(requestBody)
