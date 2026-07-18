@@ -453,10 +453,19 @@
                     </div>
                     <p class="text-xs text-slate-500 mt-2">Adjust how quickly each conversation marquee message crosses the display.</p>
                 </div>
-                <div>
-                    <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="promptInstructionsInput">Prompt behaviour / personality</label>
+                <div class="border border-slate-700/70 rounded-2xl p-4 bg-slate-900/30">
+                    <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="promptSelect">Prompt behaviour / personality</label>
+                    <select id="promptSelect" class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all mb-3"></select>
+                    <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="promptNameInput">Prompt name</label>
+                    <input id="promptNameInput" type="text" maxlength="80" placeholder="Friendly British chat" class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all mb-3">
+                    <label class="sr-only" for="promptInstructionsInput">Prompt instructions</label>
                     <textarea id="promptInstructionsInput" rows="5" placeholder="Default friendly British chat style." class="w-full resize-y bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all custom-scrollbar"></textarea>
-                    <p class="text-xs text-slate-500 mt-2">Edit the default instructions here, or clear the field and save to restore the default.</p>
+                    <div class="flex gap-2 mt-3">
+                        <button id="newPrompt" type="button" class="px-4 bg-slate-800 text-slate-400 rounded-xl font-bold">New</button>
+                        <button id="addPrompt" type="button" class="flex-1 bg-indigo-600/80 hover:bg-indigo-600 text-white py-2 rounded-xl font-bold transition-colors">Add / Update Prompt</button>
+                        <button id="removePrompt" type="button" class="px-4 bg-slate-800 text-slate-400 rounded-xl font-bold">Remove</button>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-2">Prompts are saved on the hosting server when deployed. Select the prompt you want active, edit its name or instructions, then save changes.</p>
                 </div>
                 <div class="flex gap-3 mt-8">
                     <button id="saveSettings" class="flex-1 premium-btn text-white py-3 rounded-xl font-bold">Save Changes</button>
@@ -508,6 +517,8 @@
         const apiKeyInputSecondary = document.getElementById('apiKeyInputSecondary');
         const apiKeyNameInputPrimary = document.getElementById('apiKeyNameInputPrimary');
         const apiKeyNameInputSecondary = document.getElementById('apiKeyNameInputSecondary');
+        const promptSelect = document.getElementById('promptSelect');
+        const promptNameInput = document.getElementById('promptNameInput');
         const promptInstructionsInput = document.getElementById('promptInstructionsInput');
         const scrollSpeedInput = document.getElementById('scrollSpeedInput');
         const scrollSpeedValue = document.getElementById('scrollSpeedValue');
@@ -538,6 +549,9 @@
         const remoteOllamaSelect = document.getElementById('remoteOllamaSelect');
         const addRemoteOllama = document.getElementById('addRemoteOllama');
         const removeRemoteOllama = document.getElementById('removeRemoteOllama');
+        const newPrompt = document.getElementById('newPrompt');
+        const addPrompt = document.getElementById('addPrompt');
+        const removePrompt = document.getElementById('removePrompt');
 
         const synth = window.speechSynthesis;
 
@@ -555,7 +569,8 @@
         };
         let activeGeminiKeySlot = localStorage.getItem('voxscribe_gemini_key_active') || 'primary';
         if (!['primary', 'secondary'].includes(activeGeminiKeySlot)) activeGeminiKeySlot = 'primary';
-        let savedPromptInstructions = localStorage.getItem('voxscribe_prompt_instructions') || "";
+        let savedPrompts = loadPromptConfig();
+        let activePromptId = savedPrompts.activeId;
         let serverPromptPersistenceAvailable = false;
         let savedScrollSpeed = parseFloat(localStorage.getItem('voxscribe_scroll_speed') || '1');
         if (!Number.isFinite(savedScrollSpeed) || savedScrollSpeed < 0.5 || savedScrollSpeed > 4) savedScrollSpeed = 1;
@@ -565,12 +580,88 @@
         apiKeyNameInputPrimary.value = savedApiKeyNames.primary;
         apiKeyNameInputSecondary.value = savedApiKeyNames.secondary;
         geminiKeySelect.value = activeGeminiKeySlot;
-        promptInstructionsInput.value = savedPromptInstructions || defaultSystemPrompt;
+        renderPromptSelect();
         scrollSpeedInput.value = savedScrollSpeed;
 
+        function createDefaultPrompt() {
+            return { id: 'default', name: 'Default friendly British chat', prompt: defaultSystemPrompt };
+        }
+
         function normalizePromptInstructions(promptInstructions) {
-            const trimmedPrompt = (promptInstructions || '').trim();
-            return trimmedPrompt === defaultSystemPrompt ? '' : trimmedPrompt;
+            return (promptInstructions || '').trim() || defaultSystemPrompt;
+        }
+
+        function normalizePromptConfig(config = {}) {
+            const rawPrompts = Array.isArray(config.prompts) ? config.prompts : [];
+            let prompts = rawPrompts.map((prompt, index) => ({
+                id: String(prompt.id || `prompt-${Date.now()}-${index}`),
+                name: String(prompt.name || `Prompt ${index + 1}`).trim().slice(0, 80) || `Prompt ${index + 1}`,
+                prompt: normalizePromptInstructions(prompt.prompt)
+            })).filter(prompt => prompt.prompt);
+
+            if (!prompts.length) {
+                const legacyPrompt = typeof config.prompt === 'string' ? config.prompt : localStorage.getItem('voxscribe_prompt_instructions');
+                prompts = [{ ...createDefaultPrompt(), prompt: normalizePromptInstructions(legacyPrompt || defaultSystemPrompt) }];
+            }
+
+            if (!prompts.some(prompt => prompt.id === 'default')) prompts.unshift(createDefaultPrompt());
+            const activeId = prompts.some(prompt => prompt.id === config.activeId) ? config.activeId : prompts[0].id;
+            return { prompts, activeId };
+        }
+
+        function loadPromptConfig() {
+            try {
+                return normalizePromptConfig(JSON.parse(localStorage.getItem('voxscribe_prompts') || '{}'));
+            } catch (error) {
+                return normalizePromptConfig({});
+            }
+        }
+
+        function savePromptConfigLocally() {
+            localStorage.setItem('voxscribe_prompts', JSON.stringify(savedPrompts));
+            const activePrompt = getActivePrompt();
+            localStorage.setItem('voxscribe_prompt_instructions', activePrompt?.prompt || defaultSystemPrompt);
+        }
+
+        function getActivePrompt() {
+            return savedPrompts.prompts.find(prompt => prompt.id === activePromptId) || savedPrompts.prompts[0] || createDefaultPrompt();
+        }
+
+        function renderPromptSelect() {
+            promptSelect.innerHTML = '';
+            savedPrompts.prompts.forEach(prompt => {
+                const option = document.createElement('option');
+                option.value = prompt.id;
+                option.textContent = prompt.name;
+                promptSelect.appendChild(option);
+            });
+            promptSelect.value = activePromptId;
+            populateSelectedPrompt();
+        }
+
+        function populateSelectedPrompt() {
+            activePromptId = promptSelect.value || activePromptId;
+            const activePrompt = getActivePrompt();
+            promptNameInput.value = activePrompt.name;
+            promptInstructionsInput.value = activePrompt.prompt;
+            removePrompt.disabled = savedPrompts.prompts.length <= 1;
+            removePrompt.classList.toggle('opacity-50', removePrompt.disabled);
+        }
+
+        function upsertCurrentPrompt() {
+            const existingId = promptSelect.value || activePromptId || '';
+            const existingIndex = savedPrompts.prompts.findIndex(prompt => prompt.id === existingId);
+            const prompt = {
+                id: existingIndex >= 0 ? existingId : `prompt-${Date.now()}`,
+                name: (promptNameInput.value.trim() || 'Untitled prompt').slice(0, 80),
+                prompt: normalizePromptInstructions(promptInstructionsInput.value)
+            };
+            if (existingIndex >= 0) savedPrompts.prompts[existingIndex] = prompt;
+            else savedPrompts.prompts.push(prompt);
+            activePromptId = prompt.id;
+            savedPrompts.activeId = activePromptId;
+            savePromptConfigLocally();
+            renderPromptSelect();
         }
 
         async function fetchServerPromptInstructions() {
@@ -579,27 +670,29 @@
                 if (!response.ok) throw new Error();
                 const config = await response.json();
                 serverPromptPersistenceAvailable = true;
-                savedPromptInstructions = normalizePromptInstructions(config.prompt || '');
-                if (savedPromptInstructions) {
-                    localStorage.setItem('voxscribe_prompt_instructions', savedPromptInstructions);
-                } else {
-                    localStorage.removeItem('voxscribe_prompt_instructions');
-                }
-                promptInstructionsInput.value = savedPromptInstructions || defaultSystemPrompt;
+                savedPrompts = normalizePromptConfig(config);
+                activePromptId = savedPrompts.activeId;
+                savePromptConfigLocally();
+                renderPromptSelect();
             } catch (error) {
                 serverPromptPersistenceAvailable = false;
             }
         }
 
-        async function saveServerPromptInstructions(promptInstructions) {
+        async function saveServerPromptInstructions() {
             if (!serverPromptPersistenceAvailable) return false;
             try {
                 const response = await fetch('/api/prompt', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt: promptInstructions })
+                    body: JSON.stringify(savedPrompts)
                 });
                 if (!response.ok) throw new Error();
+                const config = await response.json();
+                savedPrompts = normalizePromptConfig(config);
+                activePromptId = savedPrompts.activeId;
+                savePromptConfigLocally();
+                renderPromptSelect();
                 return true;
             } catch (error) {
                 serverPromptPersistenceAvailable = false;
@@ -1376,7 +1469,7 @@
             statusDot.className = "w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_12px_rgba(168,85,247,0.8)]";
             statusDot.classList.add('recording-pulse');
 
-            const systemPrompt = savedPromptInstructions || defaultSystemPrompt;
+            const systemPrompt = getActivePrompt().prompt || defaultSystemPrompt;
 
             try {
                 const shouldStreamTokens = streamingToggle.checked;
@@ -1548,6 +1641,30 @@
             handleUserMessage(text);
         });
         
+        promptSelect.addEventListener('change', populateSelectedPrompt);
+        newPrompt.addEventListener('click', () => {
+            promptSelect.value = '';
+            activePromptId = '';
+            promptNameInput.value = `Prompt ${savedPrompts.prompts.length + 1}`;
+            promptInstructionsInput.value = defaultSystemPrompt;
+            promptNameInput.focus();
+        });
+        addPrompt.addEventListener('click', () => {
+            upsertCurrentPrompt();
+            toastMsg.innerText = 'Prompt Saved';
+            toast.style.opacity = '1';
+            setTimeout(() => toast.style.opacity = '0', 2000);
+        });
+        removePrompt.addEventListener('click', () => {
+            if (savedPrompts.prompts.length <= 1) return;
+            const selectedId = promptSelect.value;
+            savedPrompts.prompts = savedPrompts.prompts.filter(prompt => prompt.id !== selectedId);
+            activePromptId = savedPrompts.prompts[0].id;
+            savedPrompts.activeId = activePromptId;
+            savePromptConfigLocally();
+            renderPromptSelect();
+        });
+
         remoteOllamaSelect.addEventListener('change', populateSelectedRemoteOllama);
         addRemoteOllama.addEventListener('click', async () => {
             const name = remoteOllamaNameInput.value.trim();
@@ -1599,8 +1716,7 @@
                 secondary: apiKeyNameInputSecondary.value.trim() || defaultApiKeyNames.secondary
             };
             activeGeminiKeySlot = geminiKeySelect.value;
-            const promptInstructions = promptInstructionsInput.value.trim();
-            savedPromptInstructions = normalizePromptInstructions(promptInstructions);
+            upsertCurrentPrompt();
             localStorage.removeItem('voxscribe_gemini_key_primary');
             localStorage.removeItem('voxscribe_gemini_key_secondary');
             localStorage.setItem('voxscribe_gemini_key_name_primary', savedApiKeyNames.primary);
@@ -1608,13 +1724,7 @@
             localStorage.setItem('voxscribe_gemini_key_active', activeGeminiKeySlot);
             localStorage.setItem('voxscribe_scroll_speed', String(savedScrollSpeed));
             localStorage.removeItem('voxscribe_gemini_key');
-            if (savedPromptInstructions) {
-                localStorage.setItem('voxscribe_prompt_instructions', savedPromptInstructions);
-            } else {
-                localStorage.removeItem('voxscribe_prompt_instructions');
-            }
-            const promptSavedOnServer = await saveServerPromptInstructions(savedPromptInstructions);
-            promptInstructionsInput.value = savedPromptInstructions || defaultSystemPrompt;
+            const promptSavedOnServer = await saveServerPromptInstructions();
             scrollSpeedInput.value = savedScrollSpeed;
             updateGeminiOptionVisibility();
             settingsModal.classList.add('hidden');
