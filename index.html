@@ -69,14 +69,83 @@
             background: rgba(15, 23, 42, 0.95);
             backdrop-filter: blur(20px);
         }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            min-height: 100dvh;
+        }
+
+        .app-shell {
+            height: 100dvh;
+            display: grid;
+            grid-template-rows: auto 1fr;
+            gap: clamp(0.75rem, 2vh, 1.5rem);
+        }
+
+        .single-screen-panel {
+            min-height: 0;
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+        }
+
+        .horizontal-stage {
+            min-height: 0;
+            display: grid;
+            grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+        }
+
+        .scroll-text-card {
+            min-width: 0;
+            min-height: 0;
+            display: grid;
+            grid-template-rows: auto minmax(0, 1fr);
+        }
+
+        .scroll-text-line {
+            min-width: 0;
+            overflow-x: auto;
+            overflow-y: hidden;
+            white-space: nowrap;
+            scrollbar-gutter: stable;
+        }
+
+        .scroll-text-line::-webkit-scrollbar {
+            height: 10px;
+        }
+
+        .scroll-text-line::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 999px;
+        }
+
+        .scroll-text-line::-webkit-scrollbar-thumb {
+            background: rgba(129, 140, 248, 0.35);
+            border-radius: 999px;
+        }
+
+        .scroll-text-content {
+            display: inline-block;
+            min-width: 100%;
+        }
+
+        @media (max-height: 740px) {
+            .compact-on-short {
+                padding-top: 0.75rem !important;
+                padding-bottom: 0.75rem !important;
+            }
+        }
     </style>
 </head>
-<body class="min-h-screen text-slate-300">
+<body class="text-slate-300">
 
-    <div class="max-w-5xl mx-auto px-4 py-8 md:py-12">
-        <header class="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-6">
+    <div class="app-shell max-w-6xl mx-auto px-4 py-4 md:py-6">
+        <header class="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-                <h1 class="text-4xl font-bold text-white flex items-center gap-3 tracking-tight">
+                <h1 class="text-3xl md:text-4xl font-bold text-white flex items-center gap-3 tracking-tight">
                     <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
                         <i class="fa-solid fa-microphone-lines text-white text-xl"></i>
                     </div>
@@ -105,8 +174,8 @@
             </div>
         </header>
 
-        <main class="glass-panel rounded-2xl overflow-hidden relative">
-            <div class="border-b border-white/5 p-4 md:px-6 bg-slate-900/40 flex flex-wrap items-center justify-between gap-4">
+        <main class="glass-panel single-screen-panel rounded-2xl overflow-hidden relative">
+            <div class="border-b border-white/5 p-3 md:px-5 bg-slate-900/40 flex flex-wrap items-center justify-between gap-3 compact-on-short">
                 <div class="flex items-center gap-4">
                     <button id="startBtn" class="premium-btn flex items-center gap-2 text-white px-6 py-2.5 rounded-xl font-semibold transition-all active:scale-95">
                         <i class="fa-solid fa-comments text-sm"></i> Start Conversation
@@ -154,16 +223,31 @@
                 </div>
             </div>
 
-            <div id="editorContainer" class="relative">
-                <div id="transcriptArea" class="min-h-[450px] max-h-[650px] overflow-y-auto p-6 md:p-10 text-lg md:text-xl leading-relaxed text-slate-200 custom-scrollbar flex flex-col gap-4 focus:outline-none" contenteditable="false">
-                    <div class="text-center w-full mt-10" id="initialPlaceholder">
-                        <span class="text-slate-600 italic font-light">Click "Start Conversation" and say hello...</span>
-                    </div>
-                </div>
+            <div id="editorContainer" class="relative min-h-0 grid grid-rows-[1fr_auto]">
+                <section id="transcriptArea" class="horizontal-stage p-4 md:p-6 gap-4 text-slate-200 focus:outline-none" contenteditable="false" aria-label="Conversation display">
+                    <article class="scroll-text-card rounded-2xl border border-indigo-500/20 bg-indigo-600/10 p-4 md:p-6 shadow-lg shadow-indigo-600/10">
+                        <div class="flex items-center justify-between gap-3 text-xs font-bold uppercase tracking-[0.24em] text-indigo-300">
+                            <span><i class="fa-solid fa-wave-square mr-2"></i>Speech to text</span>
+                            <span class="text-indigo-200/50">scroll sideways</span>
+                        </div>
+                        <div id="userTextScroller" class="scroll-text-line mt-3 text-4xl md:text-6xl font-semibold leading-tight text-white" tabindex="0">
+                            <span id="userTextDisplay" class="scroll-text-content text-slate-500 italic font-light">Click "Start Conversation" and say hello...</span>
+                        </div>
+                    </article>
+                    <article class="scroll-text-card rounded-2xl border border-purple-500/20 bg-slate-900/70 p-4 md:p-6 shadow-lg">
+                        <div class="flex items-center justify-between gap-3 text-xs font-bold uppercase tracking-[0.24em] text-purple-300">
+                            <span><i class="fa-solid fa-sparkles mr-2"></i>AI response</span>
+                            <span class="text-purple-200/50">scroll sideways</span>
+                        </div>
+                        <div id="aiTextScroller" class="scroll-text-line mt-3 text-4xl md:text-6xl font-semibold leading-tight text-slate-100" tabindex="0">
+                            <span id="aiTextDisplay" class="scroll-text-content text-slate-500 italic font-light">AI response will appear here...</span>
+                        </div>
+                    </article>
+                </section>
                 
-                <form id="textInputForm" class="border-t border-white/5 bg-slate-900/60 p-4 md:p-6 flex flex-col sm:flex-row gap-3" aria-label="Send typed message">
+                <form id="textInputForm" class="border-t border-white/5 bg-slate-900/60 p-3 md:p-4 flex flex-col sm:flex-row gap-3 compact-on-short" aria-label="Send typed message">
                     <label for="textInput" class="sr-only">Type a message</label>
-                    <textarea id="textInput" rows="1" placeholder="Type a message instead of speaking..." class="flex-1 resize-none bg-slate-950/70 border border-slate-700 text-white placeholder:text-slate-500 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none transition-all custom-scrollbar" autocomplete="off"></textarea>
+                    <textarea id="textInput" rows="1" placeholder="Type a message instead of speaking..." class="flex-1 max-h-24 resize-none bg-slate-950/70 border border-slate-700 text-white placeholder:text-slate-500 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none transition-all custom-scrollbar" autocomplete="off"></textarea>
                     <button id="sendTextBtn" type="submit" class="premium-btn flex items-center justify-center gap-2 text-white px-6 py-3 rounded-xl font-semibold transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
                         <i class="fa-solid fa-paper-plane text-sm"></i> Send
                     </button>
@@ -292,6 +376,10 @@
         const ollamaGroup = document.getElementById('ollamaGroup');
         const remoteOllamaGroup = document.getElementById('remoteOllamaGroup');
         const transcriptArea = document.getElementById('transcriptArea');
+        const userTextScroller = document.getElementById('userTextScroller');
+        const userTextDisplay = document.getElementById('userTextDisplay');
+        const aiTextScroller = document.getElementById('aiTextScroller');
+        const aiTextDisplay = document.getElementById('aiTextDisplay');
         const statusIndicator = document.getElementById('statusIndicator');
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
@@ -730,57 +818,48 @@
             };
         }
 
-        function updateCurrentTranscriptUI(interim = '') {
-            const tempMsg = document.getElementById('temp-msg');
-            if (tempMsg) tempMsg.remove();
-            const placeholder = document.getElementById('initialPlaceholder');
-            if (placeholder) placeholder.remove();
+        function setHorizontalText(displayElement, scrollerElement, text, placeholderText) {
+            const value = text.trim();
+            displayElement.textContent = value || placeholderText;
+            displayElement.classList.toggle('text-slate-500', !value);
+            displayElement.classList.toggle('italic', !value);
+            displayElement.classList.toggle('font-light', !value);
+            requestAnimationFrame(() => {
+                scrollerElement.scrollLeft = scrollerElement.scrollWidth;
+            });
+        }
 
+        function setUserSpeechText(text) {
+            setHorizontalText(userTextDisplay, userTextScroller, text, 'Click "Start Conversation" and say hello...');
+        }
+
+        function setAiResponseText(text) {
+            setHorizontalText(aiTextDisplay, aiTextScroller, text, 'AI response will appear here...');
+        }
+
+        function updateCurrentTranscriptUI(interim = '') {
             if (finalTranscript || interim) {
-                const msgDiv = document.createElement('div');
-                msgDiv.id = 'temp-msg';
-                msgDiv.className = 'self-end bg-indigo-600/20 border border-indigo-500/30 text-indigo-100 rounded-2xl rounded-tr-sm px-5 py-3 max-w-[85%] shadow-md ml-auto';
-                msgDiv.innerHTML = `<span class="text-slate-200">${finalTranscript}</span><span class="text-indigo-400 opacity-70">${interim}</span>`;
-                transcriptArea.appendChild(msgDiv);
-                transcriptArea.scrollTop = transcriptArea.scrollHeight;
+                setUserSpeechText(`${finalTranscript}${interim}`);
             }
         }
 
         function appendMessageToChat(role, text) {
-            const placeholder = document.getElementById('initialPlaceholder');
-            if (placeholder) placeholder.remove();
-            const tempMsg = document.getElementById('temp-msg');
-            if (tempMsg) tempMsg.remove();
-
-            const msgDiv = document.createElement('div');
             if (role === 'user') {
-                msgDiv.className = 'self-end bg-indigo-600 text-white rounded-2xl rounded-tr-sm px-5 py-3 max-w-[85%] shadow-lg shadow-indigo-600/20 ml-auto';
+                setUserSpeechText(text);
             } else {
-                msgDiv.className = 'self-start bg-slate-800 border border-slate-700 text-slate-200 rounded-2xl rounded-tl-sm px-5 py-3 max-w-[85%] shadow-lg mr-auto';
+                setAiResponseText(text);
             }
-            msgDiv.innerText = text;
-            transcriptArea.appendChild(msgDiv);
-            transcriptArea.scrollTop = transcriptArea.scrollHeight;
             chatHistory.push({ role: role, content: text });
         }
 
         function createAssistantMessageElement() {
-            const placeholder = document.getElementById('initialPlaceholder');
-            if (placeholder) placeholder.remove();
-            const tempMsg = document.getElementById('temp-msg');
-            if (tempMsg) tempMsg.remove();
-
-            const msgDiv = document.createElement('div');
-            msgDiv.className = 'self-start bg-slate-800 border border-slate-700 text-slate-200 rounded-2xl rounded-tl-sm px-5 py-3 max-w-[85%] shadow-lg mr-auto';
-            transcriptArea.appendChild(msgDiv);
-            transcriptArea.scrollTop = transcriptArea.scrollHeight;
-            return msgDiv;
+            setAiResponseText('');
+            return aiTextDisplay;
         }
 
         function renderStreamChunk(msgDiv, currentText, chunkText) {
             const nextText = currentText + chunkText;
-            msgDiv.innerText = nextText;
-            transcriptArea.scrollTop = transcriptArea.scrollHeight;
+            setAiResponseText(nextText);
             return nextText;
         }
 
