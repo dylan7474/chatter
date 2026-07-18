@@ -983,22 +983,41 @@
             scrollerContent.style.animation = '';
         }
 
-        function setHorizontalText(displayElement, text, placeholderText, activeColorClass) {
+        function setHorizontalText(displayElement, text, placeholderText, activeColorClass, restartScroller = true) {
             const value = text.trim();
             displayElement.textContent = value || placeholderText;
             displayElement.classList.toggle('text-slate-500', !value);
             displayElement.classList.toggle('italic', !value);
             displayElement.classList.toggle('font-light', !value);
             displayElement.classList.toggle(activeColorClass, Boolean(value));
-            restartConversationMarquee();
+            if (restartScroller) restartConversationMarquee();
         }
 
-        function setUserSpeechText(text) {
-            setHorizontalText(userTextDisplay, text, 'Click "Start Conversation" and say hello...', 'text-red-400');
+        function setUserSpeechText(text, restartScroller = true) {
+            setHorizontalText(userTextDisplay, text, 'Click "Start Conversation" and say hello...', 'text-red-400', restartScroller);
         }
 
-        function setAiResponseText(text) {
-            setHorizontalText(aiTextDisplay, text, 'AI response will appear here...', 'text-green-400');
+        function setAiResponseText(text, restartScroller = true) {
+            setHorizontalText(aiTextDisplay, text, 'AI response will appear here...', 'text-green-400', restartScroller);
+        }
+
+        function clearUserSpeechText(restartScroller = true) {
+            userTextDisplay.textContent = '';
+            userTextDisplay.classList.remove('text-red-400');
+            userTextDisplay.classList.add('text-slate-500', 'italic', 'font-light');
+            if (restartScroller) restartConversationMarquee();
+        }
+
+        function clearAiResponseText(restartScroller = true) {
+            aiTextDisplay.textContent = '';
+            aiTextDisplay.classList.remove('text-green-400');
+            aiTextDisplay.classList.add('text-slate-500', 'italic', 'font-light');
+            if (restartScroller) restartConversationMarquee();
+        }
+
+        function startAssistantResponseDisplay(text) {
+            clearUserSpeechText(false);
+            setAiResponseText(text);
         }
 
         function updateCurrentTranscriptUI(interim = '') {
@@ -1011,19 +1030,20 @@
             if (role === 'user') {
                 setUserSpeechText(text);
             } else {
-                setAiResponseText(text);
+                startAssistantResponseDisplay(text);
             }
             chatHistory.push({ role: role, content: text });
         }
 
         function createAssistantMessageElement() {
-            setAiResponseText('');
+            clearUserSpeechText(false);
+            clearAiResponseText(false);
             return aiTextDisplay;
         }
 
         function renderStreamChunk(msgDiv, currentText, chunkText) {
             const nextText = currentText + chunkText;
-            setAiResponseText(nextText);
+            setAiResponseText(nextText, currentText.length === 0);
             return nextText;
         }
 
@@ -1381,7 +1401,7 @@
                         appendMessageToChat('assistant', aiResponseText);
                     }
 
-                    chatHistory.push({ role: 'assistant', content: aiResponseText });
+                    if (shouldStreamTokens) chatHistory.push({ role: 'assistant', content: aiResponseText });
                     statusText.innerText = "AI Speaking...";
                     streamComplete = true;
                     if (!shouldStreamTokens || !isChunkedLocalTtsEngine()) speakFullResponse(aiResponseText);
