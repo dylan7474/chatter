@@ -16,12 +16,13 @@ It captures speech from your microphone, sends conversation context to an AI bac
 No compile step is required.
 
 1. Clone the repository.
-2. Start a local static web server from the repo root (recommended):
+2. If you want the app to use a custom Piper voice, add both required voice files to the repo root before deploying: `my_voice.onnx` and its matching `my_voice.onnx.json` metadata/config file. The custom voice will not load unless both files are present together.
+3. Start a local static web server from the repo root (recommended):
    ```bash
    python3 -m http.server 8000
    ```
-3. Open `http://localhost:8000` in a modern browser.
-4. For Gemini cloud access, run the container deployment and set `GEMINI_API_KEY`, `GEMINI_API_KEY_PRIMARY`, or `GEMINI_API_KEY_SECONDARY` on the hosting server/container. Browser-entered Gemini keys are no longer used.
+4. Open `http://localhost:8000` in a modern browser.
+5. For Gemini cloud access, run the container deployment and set `GEMINI_API_KEY`, `GEMINI_API_KEY_PRIMARY`, or `GEMINI_API_KEY_SECONDARY` on the hosting server/container. Browser-entered Gemini keys are no longer used.
 
 > You can also open `index.html` directly, but a local server is recommended for consistent browser behavior.
 
