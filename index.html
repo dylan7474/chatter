@@ -398,7 +398,7 @@
                 </div>
                 <div class="border border-slate-700/70 rounded-2xl p-4 bg-slate-900/30">
                     <h4 class="text-sm font-bold text-white mb-2 flex items-center gap-2"><i class="fa-solid fa-key text-indigo-400"></i> Gemini API keys</h4>
-                    <p class="text-xs text-slate-500 mb-3">Gemini API requests are sent through this app's hosting server so API keys are not exposed to browsers. Configure keys on the server/container, then choose which server key should be active.</p>
+                    <p class="text-xs text-slate-500 mb-3">Gemini API keys are saved on this app's hosting server, shared with all browsers, and never sent back to the browser after saving. Enter a key to add or replace it; saved keys appear only as hidden placeholders.</p>
                     <div class="grid gap-2 sm:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)]">
                         <div>
                             <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="apiKeyNameInputPrimary">Key 1 name</label>
@@ -406,7 +406,7 @@
                         </div>
                         <div>
                             <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="apiKeyInputPrimary">Server key 1</label>
-                            <input type="text" id="apiKeyInputPrimary" value="Configured on hosting server" disabled class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-slate-400 opacity-70 outline-none transition-all">
+                            <input type="password" id="apiKeyInputPrimary" autocomplete="off" placeholder="Enter or replace server key 1" class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
                         </div>
                     </div>
                     <div class="grid gap-2 sm:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)] mt-2">
@@ -416,7 +416,7 @@
                         </div>
                         <div>
                             <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="apiKeyInputSecondary">Server key 2</label>
-                            <input type="text" id="apiKeyInputSecondary" value="Configured on hosting server" disabled class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-slate-400 opacity-70 outline-none transition-all">
+                            <input type="password" id="apiKeyInputSecondary" autocomplete="off" placeholder="Enter or replace server key 2" class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
                         </div>
                     </div>
                 </div>
@@ -583,13 +583,14 @@
         let savedPrompts = loadPromptConfig();
         let activePromptId = savedPrompts.activeId;
         let serverPromptPersistenceAvailable = false;
+        let serverGeminiKeyPersistenceAvailable = false;
         let savedScrollSpeed = parseFloat(localStorage.getItem('voxscribe_scroll_speed') || '1');
         if (!Number.isFinite(savedScrollSpeed) || savedScrollSpeed < 0.5 || savedScrollSpeed > 4) savedScrollSpeed = 1;
         let savedScrollerTextScale = parseInt(localStorage.getItem('voxscribe_scroller_text_scale') || '1', 10);
         if (![1, 2, 3].includes(savedScrollerTextScale)) savedScrollerTextScale = 1;
         let savedRemoteOllamas = loadRemoteOllamas();
-        apiKeyInputPrimary.value = 'Configured on hosting server';
-        apiKeyInputSecondary.value = 'Configured on hosting server';
+        apiKeyInputPrimary.value = '';
+        apiKeyInputSecondary.value = '';
         apiKeyNameInputPrimary.value = savedApiKeyNames.primary;
         apiKeyNameInputSecondary.value = savedApiKeyNames.secondary;
         geminiKeySelect.value = activeGeminiKeySlot;
@@ -839,6 +840,65 @@
         }
 
 
+
+        function updateGeminiKeyInputs() {
+            apiKeyInputPrimary.value = '';
+            apiKeyInputSecondary.value = '';
+            apiKeyInputPrimary.placeholder = serverGeminiKeys.primary ? 'Saved on server (hidden)' : 'Enter server key 1';
+            apiKeyInputSecondary.placeholder = serverGeminiKeys.secondary ? 'Saved on server (hidden)' : 'Enter server key 2';
+        }
+
+        function normalizeGeminiKeyConfig(config = {}) {
+            return {
+                geminiKeys: {
+                    primary: Boolean(config.geminiKeys?.primary),
+                    secondary: Boolean(config.geminiKeys?.secondary)
+                },
+                geminiKeyNames: {
+                    primary: String(config.geminiKeyNames?.primary || savedApiKeyNames.primary || defaultApiKeyNames.primary).slice(0, 80),
+                    secondary: String(config.geminiKeyNames?.secondary || savedApiKeyNames.secondary || defaultApiKeyNames.secondary).slice(0, 80)
+                }
+            };
+        }
+
+        function applyGeminiKeyConfig(config = {}) {
+            const normalized = normalizeGeminiKeyConfig(config);
+            serverGeminiKeys = normalized.geminiKeys;
+            savedApiKeyNames = normalized.geminiKeyNames;
+            apiKeyNameInputPrimary.value = savedApiKeyNames.primary;
+            apiKeyNameInputSecondary.value = savedApiKeyNames.secondary;
+            localStorage.setItem('voxscribe_gemini_key_name_primary', savedApiKeyNames.primary);
+            localStorage.setItem('voxscribe_gemini_key_name_secondary', savedApiKeyNames.secondary);
+            updateGeminiKeyInputs();
+            updateGeminiOptionVisibility();
+        }
+
+        async function saveServerGeminiKeys() {
+            if (!serverGeminiKeyPersistenceAvailable) return false;
+            const body = {
+                names: savedApiKeyNames,
+                activeSlot: activeGeminiKeySlot,
+                keys: {
+                    primary: apiKeyInputPrimary.value.trim(),
+                    secondary: apiKeyInputSecondary.value.trim()
+                }
+            };
+            try {
+                const response = await fetch('/api/gemini-keys', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (!response.ok) throw new Error();
+                const config = await response.json();
+                applyGeminiKeyConfig(config);
+                return true;
+            } catch (error) {
+                serverGeminiKeyPersistenceAvailable = false;
+                return false;
+            }
+        }
+
         function getOllamaProxyUrl(endpoint, path) {
             const params = new URLSearchParams({ endpoint, path });
             return `/api/ollama?${params.toString()}`;
@@ -955,11 +1015,16 @@
                 const response = await fetch('/api/config');
                 if (!response.ok) throw new Error();
                 const config = await response.json();
-                serverGeminiKeys = config.geminiKeys || serverGeminiKeys;
+                serverGeminiKeyPersistenceAvailable = Boolean(config.geminiKeyPersistence);
+                activeGeminiKeySlot = ['primary', 'secondary'].includes(config.activeGeminiKeySlot) ? config.activeGeminiKeySlot : activeGeminiKeySlot;
+                geminiKeySelect.value = activeGeminiKeySlot;
+                applyGeminiKeyConfig(config);
                 serverOllamaProxyAvailable = Boolean(config.ollamaProxy);
                 defaultOllamaEndpoint = config.defaultOllamaEndpoint || defaultOllamaEndpoint;
             } catch (error) {
                 serverGeminiKeys = { primary: false, secondary: false };
+                serverGeminiKeyPersistenceAvailable = false;
+                updateGeminiKeyInputs();
                 serverOllamaProxyAvailable = false;
                 defaultOllamaEndpoint = 'http://127.0.0.1:11434';
             }
@@ -1750,12 +1815,12 @@
             localStorage.setItem('voxscribe_scroll_speed', String(savedScrollSpeed));
             localStorage.setItem('voxscribe_scroller_text_scale', String(savedScrollerTextScale));
             localStorage.removeItem('voxscribe_gemini_key');
-            const promptSavedOnServer = await saveServerPromptInstructions();
+            const [promptSavedOnServer, geminiKeysSavedOnServer] = await Promise.all([saveServerPromptInstructions(), saveServerGeminiKeys()]);
             scrollSpeedInput.value = savedScrollSpeed;
             scrollerTextSizeSelect.value = String(savedScrollerTextScale);
             updateGeminiOptionVisibility();
             settingsModal.classList.add('hidden');
-            toastMsg.innerText = promptSavedOnServer ? "Settings Saved" : "Settings Saved Locally";
+            toastMsg.innerText = promptSavedOnServer || geminiKeysSavedOnServer ? "Settings Saved" : "Settings Saved Locally";
             toast.style.opacity = '1';
             setTimeout(() => toast.style.opacity = '0', 2000);
         });
