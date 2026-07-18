@@ -57,6 +57,9 @@ GEMINI_API_KEY=your_key_here ./deploy.sh 3014
 
 ## Troubleshooting
 
+- **Speech recognition does not start on Chrome for Android**:
+  update to the latest Chrome, use an HTTPS URL, and make sure Chrome has Android microphone permission. The app avoids holding a separate visualizer microphone stream on Android Chrome because that can prevent the browser speech recognizer from starting; if recognition still fails, close other apps or tabs that may be using the microphone and check that the phone has internet access.
+
 - **Microphone access blocked on a hostname (for example `http://ebg.dylanjones.org:3014`)**:
   browsers require a **secure context** for mic capture. Use HTTPS on your hostname
   (for example `https://ebg.dylanjones.org:3014` if you are still using that port), or run
