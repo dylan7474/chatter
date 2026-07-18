@@ -51,6 +51,11 @@ const tmpDir = fs.existsSync('/dev/shm') ? '/dev/shm' : '/tmp';
 const ttsCache = new Map();
 const inFlightTts = new Map();
 const maxCacheEntries = Number(process.env.TTS_CACHE_ENTRIES || 128);
+const geminiModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
+const geminiKeys = {
+  primary: process.env.GEMINI_API_KEY_PRIMARY || process.env.GEMINI_API_KEY || '',
+  secondary: process.env.GEMINI_API_KEY_SECONDARY || ''
+};
 
 function cacheKey(engine, voice, text) {
   return crypto.createHash('sha256').update(`${engine}\0${voice}\0${text}`).digest('hex');
@@ -118,8 +123,76 @@ function send(res, status, headers, body) {
   res.end(body);
 }
 
+function readJsonBody(req, limit = 1024 * 1024) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', chunk => {
+      body += chunk;
+      if (body.length > limit) {
+        reject(new Error('Request body too large'));
+        req.destroy();
+      }
+    });
+    req.on('end', () => {
+      try {
+        resolve(body ? JSON.parse(body) : {});
+      } catch (error) {
+        reject(new Error('Invalid JSON body'));
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+async function proxyGemini(req, res, url) {
+  if (req.method !== 'POST') return send(res, 405, { 'Content-Type': 'text/plain' }, 'Method not allowed');
+  const slot = url.searchParams.get('slot') === 'secondary' ? 'secondary' : 'primary';
+  const apiKey = geminiKeys[slot];
+  if (!apiKey) return send(res, 503, { 'Content-Type': 'text/plain' }, 'Gemini API key is not configured on the server');
+
+  try {
+    const requestBody = await readJsonBody(req);
+    const shouldStream = url.searchParams.get('stream') === '1';
+    const geminiEndpoint = shouldStream ? 'streamGenerateContent?alt=sse' : 'generateContent';
+    const separator = shouldStream ? '&' : '?';
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:${geminiEndpoint}${separator}key=${encodeURIComponent(apiKey)}`;
+    const upstream = await fetch(geminiUrl, {
+      method: 'POST',
+      headers: {
+        'Accept': shouldStream ? 'text/event-stream' : 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    res.writeHead(upstream.status, {
+      'Content-Type': upstream.headers.get('content-type') || (shouldStream ? 'text/event-stream' : 'application/json'),
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff'
+    });
+    if (upstream.body) {
+      for await (const chunk of upstream.body) res.write(chunk);
+    }
+    res.end();
+  } catch (error) {
+    console.error(error);
+    if (!res.headersSent) send(res, 500, { 'Content-Type': 'text/plain' }, 'Gemini proxy failed');
+    else res.end();
+  }
+}
+
 http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
+
+  if (url.pathname === '/api/config') {
+    return send(res, 200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, JSON.stringify({
+      geminiKeys: { primary: Boolean(geminiKeys.primary), secondary: Boolean(geminiKeys.secondary) }
+    }));
+  }
+
+  if (url.pathname === '/api/gemini') {
+    return proxyGemini(req, res, url);
+  }
 
   if (url.pathname === '/api/tts') {
     const text = (url.searchParams.get('text') || '').slice(0, 1200).trim();
@@ -222,6 +295,10 @@ docker run -d \
   --name "${CONTAINER_NAME}" \
   -p "${PORT_ARG}:${PORT_ARG}" \
   -e PORT="${PORT_ARG}" \
+  -e GEMINI_API_KEY \
+  -e GEMINI_API_KEY_PRIMARY \
+  -e GEMINI_API_KEY_SECONDARY \
+  -e GEMINI_MODEL \
   --restart unless-stopped \
   "${IMAGE_NAME}" >/dev/null
 
@@ -230,5 +307,6 @@ echo "Deployed ${PROJECT_NAME}."
 echo "URL: http://localhost:${PORT_ARG}/"
 echo "App file: http://localhost:${PORT_ARG}/index.html"
 echo "Local TTS: http://localhost:${PORT_ARG}/api/tts
+Gemini proxy: http://localhost:${PORT_ARG}/api/gemini (set GEMINI_API_KEY, GEMINI_API_KEY_PRIMARY, or GEMINI_API_KEY_SECONDARY before running deploy.sh)
 eSpeak, a default UK English local Piper voice, and Kokoro-82M are bundled. Override PIPER_MODEL to use a mounted Piper .onnx voice model, or KOKORO_MODEL/KOKORO_VOICES/KOKORO_VOICE for Kokoro."
 echo "========================================="
