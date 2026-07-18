@@ -77,9 +77,24 @@
 
         body {
             min-height: 100dvh;
+            max-width: 100%;
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
+
+        select,
+        textarea,
+        input,
+        button {
+            max-width: 100%;
         }
 
         .app-shell {
+            width: 100%;
             height: 100dvh;
             display: grid;
             grid-template-rows: auto 1fr;
@@ -180,6 +195,68 @@
             .scroll-text-line::after {
                 animation-duration: 1ms;
                 animation-iteration-count: 1;
+            }
+        }
+
+        @media (max-width: 640px) {
+            html, body {
+                overflow-x: hidden;
+                overflow-y: auto;
+            }
+
+            .app-shell {
+                height: auto;
+                min-height: 100dvh;
+            }
+
+            header > .flex,
+            header select,
+            #openSettings,
+            #statusIndicator,
+            #startBtn,
+            #stopBtn,
+            #aiModelSelect,
+            #ttsEngineSelect {
+                width: 100%;
+            }
+
+            header > .flex,
+            .single-screen-panel > .border-b > .flex,
+            .single-screen-panel > .border-b > .flex + div {
+                min-width: 0;
+            }
+
+            header > .flex {
+                align-items: stretch;
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+
+            .single-screen-panel > .border-b > .flex,
+            .single-screen-panel > .border-b > .flex + div {
+                align-items: stretch;
+                width: 100%;
+            }
+
+            .single-screen-panel > .border-b > .flex + div label {
+                width: 100%;
+            }
+
+            #geminiKeySelect {
+                flex: 1 1 auto;
+                min-width: 0;
+            }
+
+            #visualizerContainer {
+                width: 100%;
+            }
+
+            .scroll-text-card {
+                padding: 1rem;
+            }
+
+            .scroll-text-line {
+                font-size: clamp(2rem, 12vw, 3rem);
             }
         }
 
@@ -906,22 +983,41 @@
             scrollerContent.style.animation = '';
         }
 
-        function setHorizontalText(displayElement, text, placeholderText, activeColorClass) {
+        function setHorizontalText(displayElement, text, placeholderText, activeColorClass, restartScroller = true) {
             const value = text.trim();
             displayElement.textContent = value || placeholderText;
             displayElement.classList.toggle('text-slate-500', !value);
             displayElement.classList.toggle('italic', !value);
             displayElement.classList.toggle('font-light', !value);
             displayElement.classList.toggle(activeColorClass, Boolean(value));
-            restartConversationMarquee();
+            if (restartScroller) restartConversationMarquee();
         }
 
-        function setUserSpeechText(text) {
-            setHorizontalText(userTextDisplay, text, 'Click "Start Conversation" and say hello...', 'text-red-400');
+        function setUserSpeechText(text, restartScroller = true) {
+            setHorizontalText(userTextDisplay, text, 'Click "Start Conversation" and say hello...', 'text-red-400', restartScroller);
         }
 
-        function setAiResponseText(text) {
-            setHorizontalText(aiTextDisplay, text, 'AI response will appear here...', 'text-green-400');
+        function setAiResponseText(text, restartScroller = true) {
+            setHorizontalText(aiTextDisplay, text, 'AI response will appear here...', 'text-green-400', restartScroller);
+        }
+
+        function clearUserSpeechText(restartScroller = true) {
+            userTextDisplay.textContent = '';
+            userTextDisplay.classList.remove('text-red-400');
+            userTextDisplay.classList.add('text-slate-500', 'italic', 'font-light');
+            if (restartScroller) restartConversationMarquee();
+        }
+
+        function clearAiResponseText(restartScroller = true) {
+            aiTextDisplay.textContent = '';
+            aiTextDisplay.classList.remove('text-green-400');
+            aiTextDisplay.classList.add('text-slate-500', 'italic', 'font-light');
+            if (restartScroller) restartConversationMarquee();
+        }
+
+        function startAssistantResponseDisplay(text) {
+            clearUserSpeechText(false);
+            setAiResponseText(text);
         }
 
         function updateCurrentTranscriptUI(interim = '') {
@@ -934,19 +1030,20 @@
             if (role === 'user') {
                 setUserSpeechText(text);
             } else {
-                setAiResponseText(text);
+                startAssistantResponseDisplay(text);
             }
             chatHistory.push({ role: role, content: text });
         }
 
         function createAssistantMessageElement() {
-            setAiResponseText('');
+            clearUserSpeechText(false);
+            clearAiResponseText(false);
             return aiTextDisplay;
         }
 
         function renderStreamChunk(msgDiv, currentText, chunkText) {
             const nextText = currentText + chunkText;
-            setAiResponseText(nextText);
+            setAiResponseText(nextText, currentText.length === 0);
             return nextText;
         }
 
@@ -1304,7 +1401,7 @@
                         appendMessageToChat('assistant', aiResponseText);
                     }
 
-                    chatHistory.push({ role: 'assistant', content: aiResponseText });
+                    if (shouldStreamTokens) chatHistory.push({ role: 'assistant', content: aiResponseText });
                     statusText.innerText = "AI Speaking...";
                     streamComplete = true;
                     if (!shouldStreamTokens || !isChunkedLocalTtsEngine()) speakFullResponse(aiResponseText);
