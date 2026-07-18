@@ -258,6 +258,7 @@
         let isRecording = false;
         let sessionActive = false;
         let finalTranscript = '';
+        let pendingRecognitionTranscript = '';
         let recognition = null;
         let chatHistory = [];
         let isAITalking = false;
@@ -671,28 +672,35 @@
                 // If AI is talking, immediately discard and clear buffers.
                 if (isAITalking) {
                     finalTranscript = '';
+                    pendingRecognitionTranscript = '';
                     return;
                 }
 
                 clearTimeout(silenceTimer);
                 let interimTranscript = '';
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                let latestTranscript = '';
+                const startIndex = Number.isInteger(event.resultIndex) ? event.resultIndex : 0;
+                for (let i = startIndex; i < event.results.length; ++i) {
                     const transcript = event.results[i][0].transcript;
+                    latestTranscript += transcript;
                     if (event.results[i].isFinal) {
                         finalTranscript += transcript + ' ';
                     } else {
                         interimTranscript += transcript;
                     }
                 }
+                pendingRecognitionTranscript = latestTranscript.trim() || interimTranscript.trim() || pendingRecognitionTranscript;
                 
-                updateCurrentTranscriptUI(interimTranscript);
+                updateCurrentTranscriptUI(interimTranscript || (!finalTranscript ? pendingRecognitionTranscript : ''));
 
-                // Start silence timer to trigger AI
+                // Start silence timer to trigger AI. Some mobile browsers report audible
+                // speech without marking it final, so fall back to the latest partial text.
                 silenceTimer = setTimeout(() => {
-                    const text = finalTranscript.trim();
+                    const text = (finalTranscript.trim() || pendingRecognitionTranscript.trim());
                     if (text.length > 0) {
                         handleUserMessage(text);
-                        finalTranscript = ''; 
+                        finalTranscript = '';
+                        pendingRecognitionTranscript = '';
                     }
                 }, 1600);
             };
@@ -727,7 +735,13 @@
                 const msgDiv = document.createElement('div');
                 msgDiv.id = 'temp-msg';
                 msgDiv.className = 'self-end bg-indigo-600/20 border border-indigo-500/30 text-indigo-100 rounded-2xl rounded-tr-sm px-5 py-3 max-w-[85%] shadow-md ml-auto';
-                msgDiv.innerHTML = `<span class="text-slate-200">${finalTranscript}</span><span class="text-indigo-400 opacity-70">${interim}</span>`;
+                const finalSpan = document.createElement('span');
+                finalSpan.className = 'text-slate-200';
+                finalSpan.innerText = finalTranscript;
+                const interimSpan = document.createElement('span');
+                interimSpan.className = 'text-indigo-400 opacity-70';
+                interimSpan.innerText = interim;
+                msgDiv.append(finalSpan, interimSpan);
                 transcriptArea.appendChild(msgDiv);
                 transcriptArea.scrollTop = transcriptArea.scrollHeight;
             }
@@ -1003,6 +1017,7 @@
                 // and any internal browser STT buffer is cleared.
                 setTimeout(() => {
                     finalTranscript = ''; // Extra wipe of the transcript buffer
+                    pendingRecognitionTranscript = '';
                     isAITalking = false;
                     statusDot.classList.remove('recording-pulse');
                     if (sessionActive) {
@@ -1037,6 +1052,7 @@
             // ACTIVATE MUTE:
             isAITalking = true; 
             finalTranscript = ''; // Clear user text buffer immediately
+            pendingRecognitionTranscript = '';
             clearTimeout(silenceTimer); // Stop any pending AI triggers
             if (recognition) {
                 try { recognition.stop(); } catch (e) {}
@@ -1159,6 +1175,7 @@
             if (!stream) return;
             if (synth.speaking) synth.cancel();
             finalTranscript = '';
+            pendingRecognitionTranscript = '';
             recognition.lang = languageSelect.value;
             sessionActive = true;
             try { recognition.start(); } catch (e) {}
@@ -1174,6 +1191,7 @@
             nextTtsPlaybackSequence = 0;
             isTtsAudioPlaying = false;
             streamingSpeechBuffer = '';
+            pendingRecognitionTranscript = '';
             isAITalking = false;
             window.speechUtterances = [];
             chunksSpeaking = 0;
