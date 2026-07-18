@@ -126,18 +126,42 @@ function send(res, status, headers, body) {
   res.end(body);
 }
 
-function readStoredPrompt() {
+const defaultPrompt = 'You are a friendly, natural British person having a casual spoken conversation. Keep your responses extremely brief (usually one sentence, max two). Speak casually and warmly. Avoid formal AI language, lists, or markdown. Just act like a mate chatting over tea.';
+
+function normalizePromptConfig(config = {}) {
+  const rawPrompts = Array.isArray(config.prompts) ? config.prompts.slice(0, 50) : [];
+  let prompts = rawPrompts.map((prompt, index) => ({
+    id: String(prompt.id || `prompt-${Date.now()}-${index}`).slice(0, 80),
+    name: String(prompt.name || `Prompt ${index + 1}`).trim().slice(0, 80) || `Prompt ${index + 1}`,
+    prompt: String(prompt.prompt || defaultPrompt).trim().slice(0, 8000) || defaultPrompt
+  }));
+
+  if (!prompts.length) {
+    const legacyPrompt = typeof config.prompt === 'string' ? config.prompt.trim() : '';
+    prompts = [{ id: 'default', name: 'Default friendly British chat', prompt: legacyPrompt.slice(0, 8000) || defaultPrompt }];
+  }
+
+  if (!prompts.some(prompt => prompt.id === 'default')) {
+    prompts.unshift({ id: 'default', name: 'Default friendly British chat', prompt: defaultPrompt });
+  }
+
+  const activeId = prompts.some(prompt => prompt.id === config.activeId) ? config.activeId : prompts[0].id;
+  return { prompts, activeId };
+}
+
+function readStoredPrompts() {
   try {
-    const saved = JSON.parse(fs.readFileSync(promptFile, 'utf8'));
-    return typeof saved.prompt === 'string' ? saved.prompt : '';
+    return normalizePromptConfig(JSON.parse(fs.readFileSync(promptFile, 'utf8')));
   } catch (error) {
-    return '';
+    return normalizePromptConfig({});
   }
 }
 
-function writeStoredPrompt(prompt) {
+function writeStoredPrompts(config) {
   fs.mkdirSync(dataDir, { recursive: true });
-  fs.writeFileSync(promptFile, JSON.stringify({ prompt, updatedAt: new Date().toISOString() }, null, 2));
+  const saved = normalizePromptConfig(config);
+  fs.writeFileSync(promptFile, JSON.stringify({ ...saved, updatedAt: new Date().toISOString() }, null, 2));
+  return saved;
 }
 
 function readJsonBody(req, limit = 1024 * 1024) {
@@ -268,16 +292,14 @@ http.createServer((req, res) => {
 
   if (url.pathname === '/api/prompt') {
     if (req.method === 'GET') {
-      return send(res, 200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, JSON.stringify({ prompt: readStoredPrompt() }));
+      return send(res, 200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, JSON.stringify(readStoredPrompts()));
     }
 
     if (req.method === 'PUT') {
-      readJsonBody(req, 16 * 1024)
+      readJsonBody(req, 256 * 1024)
         .then(body => {
-          const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
-          const savedPrompt = prompt.slice(0, 8000);
-          writeStoredPrompt(savedPrompt);
-          send(res, 200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, JSON.stringify({ prompt: savedPrompt }));
+          const savedPrompts = writeStoredPrompts(body);
+          send(res, 200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, JSON.stringify(savedPrompts));
         })
         .catch(error => send(res, 400, { 'Content-Type': 'text/plain' }, error.message));
       return;
