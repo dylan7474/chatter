@@ -95,7 +95,6 @@
         .horizontal-stage {
             min-height: 0;
             display: grid;
-            grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
         }
 
         .scroll-text-card {
@@ -128,8 +127,14 @@
         }
 
         .scroll-text-content {
+            display: inline-flex;
+            align-items: baseline;
+            gap: 1.5rem;
+            min-width: max-content;
+        }
+
+        .scroll-text-segment {
             display: inline-block;
-            min-width: 100%;
         }
 
         @media (max-height: 740px) {
@@ -224,23 +229,17 @@
             </div>
 
             <div id="editorContainer" class="relative min-h-0 grid grid-rows-[1fr_auto]">
-                <section id="transcriptArea" class="horizontal-stage p-4 md:p-6 gap-4 text-slate-200 focus:outline-none" contenteditable="false" aria-label="Conversation display">
-                    <article class="scroll-text-card rounded-2xl border border-indigo-500/20 bg-indigo-600/10 p-4 md:p-6 shadow-lg shadow-indigo-600/10">
+                <section id="transcriptArea" class="horizontal-stage p-4 md:p-6 text-slate-200 focus:outline-none" contenteditable="false" aria-label="Conversation display">
+                    <article class="scroll-text-card rounded-2xl border border-indigo-500/20 bg-slate-900/70 p-4 md:p-6 shadow-lg shadow-indigo-600/10">
                         <div class="flex items-center justify-between gap-3 text-xs font-bold uppercase tracking-[0.24em] text-indigo-300">
-                            <span><i class="fa-solid fa-wave-square mr-2"></i>Speech to text</span>
+                            <span><i class="fa-solid fa-wave-square mr-2"></i>Conversation scroller</span>
                             <span class="text-indigo-200/50">scroll sideways</span>
                         </div>
-                        <div id="userTextScroller" class="scroll-text-line mt-3 text-4xl md:text-6xl font-semibold leading-tight text-white" tabindex="0">
-                            <span id="userTextDisplay" class="scroll-text-content text-slate-500 italic font-light">Click "Start Conversation" and say hello...</span>
-                        </div>
-                    </article>
-                    <article class="scroll-text-card rounded-2xl border border-purple-500/20 bg-slate-900/70 p-4 md:p-6 shadow-lg">
-                        <div class="flex items-center justify-between gap-3 text-xs font-bold uppercase tracking-[0.24em] text-purple-300">
-                            <span><i class="fa-solid fa-sparkles mr-2"></i>AI response</span>
-                            <span class="text-purple-200/50">scroll sideways</span>
-                        </div>
-                        <div id="aiTextScroller" class="scroll-text-line mt-3 text-4xl md:text-6xl font-semibold leading-tight text-slate-100" tabindex="0">
-                            <span id="aiTextDisplay" class="scroll-text-content text-slate-500 italic font-light">AI response will appear here...</span>
+                        <div id="conversationTextScroller" class="scroll-text-line mt-3 text-4xl md:text-6xl font-semibold leading-tight" tabindex="0">
+                            <span id="conversationTextDisplay" class="scroll-text-content">
+                                <span id="userTextDisplay" class="scroll-text-segment text-slate-500 italic font-light">Click "Start Conversation" and say hello...</span>
+                                <span id="aiTextDisplay" class="scroll-text-segment text-slate-500 italic font-light">AI response will appear here...</span>
+                            </span>
                         </div>
                     </article>
                 </section>
@@ -376,9 +375,8 @@
         const ollamaGroup = document.getElementById('ollamaGroup');
         const remoteOllamaGroup = document.getElementById('remoteOllamaGroup');
         const transcriptArea = document.getElementById('transcriptArea');
-        const userTextScroller = document.getElementById('userTextScroller');
+        const conversationTextScroller = document.getElementById('conversationTextScroller');
         const userTextDisplay = document.getElementById('userTextDisplay');
-        const aiTextScroller = document.getElementById('aiTextScroller');
         const aiTextDisplay = document.getElementById('aiTextDisplay');
         const statusIndicator = document.getElementById('statusIndicator');
         const statusDot = document.getElementById('statusDot');
@@ -818,23 +816,28 @@
             };
         }
 
-        function setHorizontalText(displayElement, scrollerElement, text, placeholderText) {
+        function scrollConversationTextToEnd() {
+            requestAnimationFrame(() => {
+                conversationTextScroller.scrollLeft = conversationTextScroller.scrollWidth;
+            });
+        }
+
+        function setHorizontalText(displayElement, text, placeholderText, activeColorClass) {
             const value = text.trim();
             displayElement.textContent = value || placeholderText;
             displayElement.classList.toggle('text-slate-500', !value);
             displayElement.classList.toggle('italic', !value);
             displayElement.classList.toggle('font-light', !value);
-            requestAnimationFrame(() => {
-                scrollerElement.scrollLeft = scrollerElement.scrollWidth;
-            });
+            displayElement.classList.toggle(activeColorClass, Boolean(value));
+            scrollConversationTextToEnd();
         }
 
         function setUserSpeechText(text) {
-            setHorizontalText(userTextDisplay, userTextScroller, text, 'Click "Start Conversation" and say hello...');
+            setHorizontalText(userTextDisplay, text, 'Click "Start Conversation" and say hello...', 'text-red-400');
         }
 
         function setAiResponseText(text) {
-            setHorizontalText(aiTextDisplay, aiTextScroller, text, 'AI response will appear here...');
+            setHorizontalText(aiTextDisplay, text, 'AI response will appear here...', 'text-green-400');
         }
 
         function updateCurrentTranscriptUI(interim = '') {
