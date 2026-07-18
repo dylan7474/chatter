@@ -69,14 +69,134 @@
             background: rgba(15, 23, 42, 0.95);
             backdrop-filter: blur(20px);
         }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            min-height: 100dvh;
+        }
+
+        .app-shell {
+            height: 100dvh;
+            display: grid;
+            grid-template-rows: auto 1fr;
+            gap: clamp(0.75rem, 2vh, 1.5rem);
+        }
+
+        .single-screen-panel {
+            min-height: 0;
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+        }
+
+        .horizontal-stage {
+            min-height: 0;
+            display: grid;
+        }
+
+        .scroll-text-card {
+            min-width: 0;
+            min-height: 0;
+            display: grid;
+            grid-template-rows: auto minmax(0, 1fr);
+        }
+
+        .scroll-text-line {
+            min-width: 0;
+            overflow: hidden;
+            white-space: nowrap;
+            position: relative;
+            border-radius: 1rem;
+            background:
+                linear-gradient(90deg, rgba(11, 15, 25, 0.95), transparent 16%, transparent 84%, rgba(11, 15, 25, 0.95)),
+                repeating-linear-gradient(0deg, rgba(129, 140, 248, 0.08) 0 1px, transparent 1px 7px),
+                radial-gradient(circle at 50% 50%, rgba(34, 211, 238, 0.14), transparent 65%);
+            box-shadow: inset 0 0 28px rgba(99, 102, 241, 0.18), 0 0 28px rgba(34, 211, 238, 0.08);
+        }
+
+        .scroll-text-line::before,
+        .scroll-text-line::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .scroll-text-line::before {
+            background: linear-gradient(180deg, transparent 0 45%, rgba(255, 255, 255, 0.18) 50%, transparent 55%);
+            mix-blend-mode: screen;
+            opacity: 0.35;
+        }
+
+        .scroll-text-line::after {
+            background: repeating-linear-gradient(90deg, transparent 0 2rem, rgba(34, 211, 238, 0.08) 2rem 2.1rem);
+            animation: scannerSweep 2.6s linear infinite;
+        }
+
+        .scroll-text-content {
+            display: inline-flex;
+            align-items: baseline;
+            gap: 2rem;
+            min-width: max-content;
+            padding-block: 0.25rem;
+            padding-left: 100%;
+            text-shadow: 0 0 10px currentColor, 0 0 22px currentColor, 0 0 42px rgba(34, 211, 238, 0.45);
+            animation: amigaTicker var(--scroll-duration, 18s) linear 1 both;
+            will-change: transform;
+        }
+
+        .scroll-text-line:hover .scroll-text-content,
+        .scroll-text-line:focus-within .scroll-text-content {
+            animation-play-state: paused;
+        }
+
+        .scroll-text-segment {
+            display: inline-block;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .scroll-text-separator {
+            color: #22d3ee;
+            text-shadow: 0 0 10px #22d3ee, 0 0 24px #818cf8;
+        }
+
+        @keyframes amigaTicker {
+            from { transform: translateX(0); }
+            to { transform: translateX(-100%); }
+        }
+
+        @keyframes scannerSweep {
+            from { transform: translateX(-2.1rem); }
+            to { transform: translateX(0); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .scroll-text-content,
+            .scroll-text-line::after {
+                animation-duration: 1ms;
+                animation-iteration-count: 1;
+            }
+        }
+
+        @media (max-height: 740px) {
+            .compact-on-short {
+                padding-top: 0.75rem !important;
+                padding-bottom: 0.75rem !important;
+            }
+        }
     </style>
 </head>
-<body class="min-h-screen text-slate-300">
+<body class="text-slate-300">
 
-    <div class="max-w-5xl mx-auto px-4 py-8 md:py-12">
-        <header class="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-6">
+    <div class="app-shell max-w-6xl mx-auto px-4 py-4 md:py-6">
+        <header class="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-                <h1 class="text-4xl font-bold text-white flex items-center gap-3 tracking-tight">
+                <h1 class="text-3xl md:text-4xl font-bold text-white flex items-center gap-3 tracking-tight">
                     <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
                         <i class="fa-solid fa-microphone-lines text-white text-xl"></i>
                     </div>
@@ -105,8 +225,8 @@
             </div>
         </header>
 
-        <main class="glass-panel rounded-2xl overflow-hidden relative">
-            <div class="border-b border-white/5 p-4 md:px-6 bg-slate-900/40 flex flex-wrap items-center justify-between gap-4">
+        <main class="glass-panel single-screen-panel rounded-2xl overflow-hidden relative">
+            <div class="border-b border-white/5 p-3 md:px-5 bg-slate-900/40 flex flex-wrap items-center justify-between gap-3 compact-on-short">
                 <div class="flex items-center gap-4">
                     <button id="startBtn" class="premium-btn flex items-center gap-2 text-white px-6 py-2.5 rounded-xl font-semibold transition-all active:scale-95">
                         <i class="fa-solid fa-comments text-sm"></i> Start Conversation
@@ -154,16 +274,26 @@
                 </div>
             </div>
 
-            <div id="editorContainer" class="relative">
-                <div id="transcriptArea" class="min-h-[450px] max-h-[650px] overflow-y-auto p-6 md:p-10 text-lg md:text-xl leading-relaxed text-slate-200 custom-scrollbar flex flex-col gap-4 focus:outline-none" contenteditable="false">
-                    <div class="text-center w-full mt-10" id="initialPlaceholder">
-                        <span class="text-slate-600 italic font-light">Click "Start Conversation" and say hello...</span>
-                    </div>
-                </div>
+            <div id="editorContainer" class="relative min-h-0 grid grid-rows-[1fr_auto]">
+                <section id="transcriptArea" class="horizontal-stage p-4 md:p-6 text-slate-200 focus:outline-none" contenteditable="false" aria-label="Conversation display">
+                    <article class="scroll-text-card rounded-2xl border border-indigo-500/20 bg-slate-900/70 p-4 md:p-6 shadow-lg shadow-indigo-600/10">
+                        <div class="flex items-center justify-between gap-3 text-xs font-bold uppercase tracking-[0.24em] text-indigo-300">
+                            <span><i class="fa-solid fa-wave-square mr-2"></i>Conversation scroller</span>
+                            <span class="text-cyan-200/60">demo-mode marquee</span>
+                        </div>
+                        <div id="conversationTextScroller" class="scroll-text-line mt-3 text-4xl md:text-6xl font-semibold leading-tight" tabindex="0">
+                            <span id="conversationTextDisplay" class="scroll-text-content">
+                                <span id="userTextDisplay" class="scroll-text-segment text-slate-500 italic font-light">Click "Start Conversation" and say hello...</span>
+                                <span class="scroll-text-separator" aria-hidden="true">◆◆◆</span>
+                                <span id="aiTextDisplay" class="scroll-text-segment text-slate-500 italic font-light">AI response will appear here...</span>
+                            </span>
+                        </div>
+                    </article>
+                </section>
                 
-                <form id="textInputForm" class="border-t border-white/5 bg-slate-900/60 p-4 md:p-6 flex flex-col sm:flex-row gap-3" aria-label="Send typed message">
+                <form id="textInputForm" class="border-t border-white/5 bg-slate-900/60 p-3 md:p-4 flex flex-col sm:flex-row gap-3 compact-on-short" aria-label="Send typed message">
                     <label for="textInput" class="sr-only">Type a message</label>
-                    <textarea id="textInput" rows="1" placeholder="Type a message instead of speaking..." class="flex-1 resize-none bg-slate-950/70 border border-slate-700 text-white placeholder:text-slate-500 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none transition-all custom-scrollbar" autocomplete="off"></textarea>
+                    <textarea id="textInput" rows="1" placeholder="Type a message instead of speaking..." class="flex-1 max-h-24 resize-none bg-slate-950/70 border border-slate-700 text-white placeholder:text-slate-500 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none transition-all custom-scrollbar" autocomplete="off"></textarea>
                     <button id="sendTextBtn" type="submit" class="premium-btn flex items-center justify-center gap-2 text-white px-6 py-3 rounded-xl font-semibold transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
                         <i class="fa-solid fa-paper-plane text-sm"></i> Send
                     </button>
@@ -227,6 +357,18 @@
                         <option value="">No remote servers saved</option>
                     </select>
                 </div>
+                <div class="border border-slate-700/70 rounded-2xl p-4 bg-slate-900/30">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+                        <label class="text-xs font-bold text-slate-500 uppercase tracking-widest block" for="scrollSpeedInput">Scroller speed</label>
+                        <span id="scrollSpeedValue" class="text-sm font-bold text-cyan-300">Normal</span>
+                    </div>
+                    <input id="scrollSpeedInput" type="range" min="0.5" max="2" step="0.25" value="1" class="w-full accent-indigo-500">
+                    <div class="flex justify-between text-xs text-slate-500 mt-2" aria-hidden="true">
+                        <span>Slower</span>
+                        <span>Faster</span>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-2">Adjust how quickly each conversation marquee message crosses the display.</p>
+                </div>
                 <div>
                     <label class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block" for="promptInstructionsInput">Prompt behaviour / personality</label>
                     <textarea id="promptInstructionsInput" rows="5" placeholder="Default friendly British chat style." class="w-full resize-y bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all custom-scrollbar"></textarea>
@@ -283,6 +425,8 @@
         const apiKeyNameInputPrimary = document.getElementById('apiKeyNameInputPrimary');
         const apiKeyNameInputSecondary = document.getElementById('apiKeyNameInputSecondary');
         const promptInstructionsInput = document.getElementById('promptInstructionsInput');
+        const scrollSpeedInput = document.getElementById('scrollSpeedInput');
+        const scrollSpeedValue = document.getElementById('scrollSpeedValue');
         const languageSelect = document.getElementById('languageSelect');
         const aiModelSelect = document.getElementById('aiModelSelect');
         const streamingToggle = document.getElementById('streamingToggle');
@@ -292,6 +436,9 @@
         const ollamaGroup = document.getElementById('ollamaGroup');
         const remoteOllamaGroup = document.getElementById('remoteOllamaGroup');
         const transcriptArea = document.getElementById('transcriptArea');
+        const conversationTextScroller = document.getElementById('conversationTextScroller');
+        const userTextDisplay = document.getElementById('userTextDisplay');
+        const aiTextDisplay = document.getElementById('aiTextDisplay');
         const statusIndicator = document.getElementById('statusIndicator');
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
@@ -325,6 +472,8 @@
         let activeGeminiKeySlot = localStorage.getItem('voxscribe_gemini_key_active') || 'primary';
         if (!['primary', 'secondary'].includes(activeGeminiKeySlot)) activeGeminiKeySlot = 'primary';
         let savedPromptInstructions = localStorage.getItem('voxscribe_prompt_instructions') || "";
+        let savedScrollSpeed = parseFloat(localStorage.getItem('voxscribe_scroll_speed') || '1');
+        if (!Number.isFinite(savedScrollSpeed) || savedScrollSpeed < 0.5 || savedScrollSpeed > 2) savedScrollSpeed = 1;
         let savedRemoteOllamas = loadRemoteOllamas();
         apiKeyInputPrimary.value = 'Configured on hosting server';
         apiKeyInputSecondary.value = 'Configured on hosting server';
@@ -332,6 +481,21 @@
         apiKeyNameInputSecondary.value = savedApiKeyNames.secondary;
         geminiKeySelect.value = activeGeminiKeySlot;
         promptInstructionsInput.value = savedPromptInstructions || defaultSystemPrompt;
+        scrollSpeedInput.value = savedScrollSpeed;
+
+        function getScrollSpeedLabel(speed) {
+            if (speed === 1) return 'Normal';
+            return `${speed.toFixed(2).replace(/\.00$/, '').replace(/0$/, '')}x`;
+        }
+
+        function applyScrollSpeed(speed) {
+            savedScrollSpeed = speed;
+            const durationSeconds = 18 / speed;
+            document.documentElement.style.setProperty('--scroll-duration', `${durationSeconds}s`);
+            scrollSpeedValue.textContent = getScrollSpeedLabel(speed);
+        }
+
+        applyScrollSpeed(savedScrollSpeed);
 
         const savedLang = localStorage.getItem('voxscribe_language');
         if (savedLang) languageSelect.value = savedLang;
@@ -360,6 +524,10 @@
 
         ttsEngineSelect.addEventListener('change', () => {
             localStorage.setItem('voxscribe_tts_engine', ttsEngineSelect.value);
+        });
+
+        scrollSpeedInput.addEventListener('input', () => {
+            applyScrollSpeed(parseFloat(scrollSpeedInput.value));
         });
 
         geminiKeySelect.addEventListener('change', () => {
@@ -730,57 +898,55 @@
             };
         }
 
-        function updateCurrentTranscriptUI(interim = '') {
-            const tempMsg = document.getElementById('temp-msg');
-            if (tempMsg) tempMsg.remove();
-            const placeholder = document.getElementById('initialPlaceholder');
-            if (placeholder) placeholder.remove();
+        function restartConversationMarquee() {
+            const scrollerContent = document.getElementById('conversationTextDisplay');
+            if (!scrollerContent) return;
+            scrollerContent.style.animation = 'none';
+            scrollerContent.offsetHeight;
+            scrollerContent.style.animation = '';
+        }
 
+        function setHorizontalText(displayElement, text, placeholderText, activeColorClass) {
+            const value = text.trim();
+            displayElement.textContent = value || placeholderText;
+            displayElement.classList.toggle('text-slate-500', !value);
+            displayElement.classList.toggle('italic', !value);
+            displayElement.classList.toggle('font-light', !value);
+            displayElement.classList.toggle(activeColorClass, Boolean(value));
+            restartConversationMarquee();
+        }
+
+        function setUserSpeechText(text) {
+            setHorizontalText(userTextDisplay, text, 'Click "Start Conversation" and say hello...', 'text-red-400');
+        }
+
+        function setAiResponseText(text) {
+            setHorizontalText(aiTextDisplay, text, 'AI response will appear here...', 'text-green-400');
+        }
+
+        function updateCurrentTranscriptUI(interim = '') {
             if (finalTranscript || interim) {
-                const msgDiv = document.createElement('div');
-                msgDiv.id = 'temp-msg';
-                msgDiv.className = 'self-end bg-indigo-600/20 border border-indigo-500/30 text-indigo-100 rounded-2xl rounded-tr-sm px-5 py-3 max-w-[85%] shadow-md ml-auto';
-                msgDiv.innerHTML = `<span class="text-slate-200">${finalTranscript}</span><span class="text-indigo-400 opacity-70">${interim}</span>`;
-                transcriptArea.appendChild(msgDiv);
-                transcriptArea.scrollTop = transcriptArea.scrollHeight;
+                setUserSpeechText(`${finalTranscript}${interim}`);
             }
         }
 
         function appendMessageToChat(role, text) {
-            const placeholder = document.getElementById('initialPlaceholder');
-            if (placeholder) placeholder.remove();
-            const tempMsg = document.getElementById('temp-msg');
-            if (tempMsg) tempMsg.remove();
-
-            const msgDiv = document.createElement('div');
             if (role === 'user') {
-                msgDiv.className = 'self-end bg-indigo-600 text-white rounded-2xl rounded-tr-sm px-5 py-3 max-w-[85%] shadow-lg shadow-indigo-600/20 ml-auto';
+                setUserSpeechText(text);
             } else {
-                msgDiv.className = 'self-start bg-slate-800 border border-slate-700 text-slate-200 rounded-2xl rounded-tl-sm px-5 py-3 max-w-[85%] shadow-lg mr-auto';
+                setAiResponseText(text);
             }
-            msgDiv.innerText = text;
-            transcriptArea.appendChild(msgDiv);
-            transcriptArea.scrollTop = transcriptArea.scrollHeight;
             chatHistory.push({ role: role, content: text });
         }
 
         function createAssistantMessageElement() {
-            const placeholder = document.getElementById('initialPlaceholder');
-            if (placeholder) placeholder.remove();
-            const tempMsg = document.getElementById('temp-msg');
-            if (tempMsg) tempMsg.remove();
-
-            const msgDiv = document.createElement('div');
-            msgDiv.className = 'self-start bg-slate-800 border border-slate-700 text-slate-200 rounded-2xl rounded-tl-sm px-5 py-3 max-w-[85%] shadow-lg mr-auto';
-            transcriptArea.appendChild(msgDiv);
-            transcriptArea.scrollTop = transcriptArea.scrollHeight;
-            return msgDiv;
+            setAiResponseText('');
+            return aiTextDisplay;
         }
 
         function renderStreamChunk(msgDiv, currentText, chunkText) {
             const nextText = currentText + chunkText;
-            msgDiv.innerText = nextText;
-            transcriptArea.scrollTop = transcriptArea.scrollHeight;
+            setAiResponseText(nextText);
             return nextText;
         }
 
@@ -1295,6 +1461,7 @@
             localStorage.setItem('voxscribe_gemini_key_name_primary', savedApiKeyNames.primary);
             localStorage.setItem('voxscribe_gemini_key_name_secondary', savedApiKeyNames.secondary);
             localStorage.setItem('voxscribe_gemini_key_active', activeGeminiKeySlot);
+            localStorage.setItem('voxscribe_scroll_speed', String(savedScrollSpeed));
             localStorage.removeItem('voxscribe_gemini_key');
             if (savedPromptInstructions) {
                 localStorage.setItem('voxscribe_prompt_instructions', savedPromptInstructions);
@@ -1302,6 +1469,7 @@
                 localStorage.removeItem('voxscribe_prompt_instructions');
             }
             promptInstructionsInput.value = savedPromptInstructions || defaultSystemPrompt;
+            scrollSpeedInput.value = savedScrollSpeed;
             updateGeminiOptionVisibility();
             settingsModal.classList.add('hidden');
             toastMsg.innerText = "Settings Saved";
