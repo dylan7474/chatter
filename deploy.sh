@@ -405,6 +405,12 @@ elif [ -f "${SCRIPT_DIR}/custom_voice/my_voice.onnx" ]; then
     -v "${SCRIPT_DIR}/custom_voice:/custom_voice:ro"
     -e PIPER_MODEL="/custom_voice/my_voice.onnx"
   )
+elif [ -f "${SCRIPT_DIR}/my_voice.onnx" ]; then
+  warn_missing_piper_config "${SCRIPT_DIR}/my_voice.onnx"
+  DOCKER_RUN_ARGS+=(
+    -v "${SCRIPT_DIR}:/custom_voice:ro"
+    -e PIPER_MODEL="/custom_voice/my_voice.onnx"
+  )
 fi
 
 echo "Starting container..."
