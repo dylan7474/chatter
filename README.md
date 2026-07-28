@@ -28,7 +28,7 @@ No compile step is required.
 
 ### Container deploy
 
-`deploy.sh` builds a small container that serves the app from `index.html`, exposes a local `/api/tts` endpoint backed by `espeak-ng`, Piper, and Kokoro, exposes `/api/gemini` so Gemini API access happens from the hosting container instead of each user browser, and exposes `/api/prompt` so saved prompt presets and the active prompt selection are shared by all browsers. The image bundles a default UK English local Piper voice so both local TTS choices work without a separate server.
+`deploy.sh` builds a self-contained image that serves the app from `index.html`, runs Ollama with the low-spec `llama3.2:1b` model, exposes a local `/api/tts` endpoint backed by `espeak-ng`, Piper, and Kokoro, exposes `/api/gemini` so Gemini API access happens from the hosting container instead of each user browser, and exposes `/api/prompt` so saved prompt presets and the active prompt selection are shared by all browsers. The image bundles the Ollama model and a default UK English local Piper voice, so local AI and TTS work without separate servers.
 
 ```bash
 GEMINI_API_KEY=your_key_here ./deploy.sh 3014
@@ -38,7 +38,7 @@ GEMINI_API_KEY=your_key_here ./deploy.sh 3014
 - Open `http://localhost:<port>/` or `http://localhost:<port>/index.html`.
 - Shared prompt presets, the active prompt selection, Gemini key names, the active Gemini key slot, and Gemini API keys are stored in the container on a Docker volume and are available to all browser sessions through server-side APIs. The raw Gemini keys are never returned to browsers after saving.
 - The bundled Gemini proxy is available at `http://localhost:<port>/api/gemini`. Add or replace keys from **Settings**, or seed one key with `GEMINI_API_KEY`, or two selectable server-side keys with `GEMINI_API_KEY_PRIMARY` and `GEMINI_API_KEY_SECONDARY`. Optionally set `GEMINI_MODEL` to override the default Gemini model.
-- The bundled Ollama proxy is available at `http://localhost:<port>/api/ollama`. It lets phone/tablet browsers use Ollama servers reachable from the container/host network instead of requiring the browser device to reach Ollama directly. The default local Ollama address is `http://host.docker.internal:11434`; override it with `OLLAMA_ENDPOINT=http://192.168.1.20:11434 ./deploy.sh 3014` if needed.
+- The bundled Ollama proxy is available at `http://localhost:<port>/api/ollama`. By default it talks to Ollama inside the same container, where `llama3.2:1b` is installed during the image build and checked at startup. Set `OLLAMA_MODEL` to pull a different model when the container starts, or point the proxy at another server with `OLLAMA_ENDPOINT=http://192.168.1.20:11434 ./deploy.sh 3014`.
 - The bundled local TTS endpoint is available at `http://localhost:<port>/api/tts` and is used when **TTS: Local eSpeak**, **TTS: Local Piper**, or **TTS: Local Kokoro-82M** is selected in the app.
 - **TTS: Local Piper** uses the same endpoint with `engine=piper`. The container includes a default `en_GB-southern_english_female-low` Piper voice. To use a custom Piper voice, set `PIPER_MODEL` to a host `.onnx` file path before running `deploy.sh`; the script mounts that file's directory read-only at `/custom_voice` and points the container at the mounted model. For example: `PIPER_MODEL=/home/me/voices/my_voice.onnx ./deploy.sh 3014`. Keep the matching `.onnx.json` config file beside the model file. As shortcuts, placing `my_voice.onnx` and `my_voice.onnx.json` in the repo root, or placing them under `custom_voice/`, automatically mounts the voice and sets `PIPER_MODEL=/custom_voice/my_voice.onnx`; do not hard-code `-e PIPER_MODEL=/custom_voice/my_voice.onnx` unless you also mount the directory.
 - **TTS: Local Kokoro-82M** uses the same endpoint with `engine=kokoro`. The container downloads Kokoro ONNX model files during build; set `KOKORO_MODEL`, `KOKORO_VOICES`, or `KOKORO_VOICE` to use mounted Kokoro files or a different voice.
@@ -68,7 +68,7 @@ GEMINI_API_KEY=your_key_here ./deploy.sh 3014
   locally via `http://localhost:<port>`.
 
 - **Ollama is unreachable when deployed with `deploy.sh`**:
-  confirm the address is reachable from the container/host network. For Ollama running on the Docker host, use the default `http://host.docker.internal:11434` or set `OLLAMA_ENDPOINT` before running `deploy.sh`. For another LAN server, save its address in Settings, for example `http://192.168.1.20:11434`. The remote Ollama service may need `OLLAMA_HOST=0.0.0.0:11434`.
+  check `docker logs chatter` to confirm the bundled Ollama service started and the model check completed. If `OLLAMA_ENDPOINT` points elsewhere, confirm that address is reachable from the container network. For Ollama running on the Docker host, use `OLLAMA_ENDPOINT=http://host.docker.internal:11434`; for another LAN server, use an address such as `http://192.168.1.20:11434`. A remote Ollama service may need `OLLAMA_HOST=0.0.0.0:11434`.
 
 - **Remote Ollama is unreachable from a plain static server**:
   if you are not using `deploy.sh`, the browser still contacts Ollama directly. Confirm the address is reachable from the device running the browser and that Ollama allows browser origins with an appropriate `OLLAMA_ORIGINS` setting.

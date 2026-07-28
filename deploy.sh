@@ -55,7 +55,7 @@ const ttsCache = new Map();
 const inFlightTts = new Map();
 const maxCacheEntries = Number(process.env.TTS_CACHE_ENTRIES || 128);
 const geminiModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
-const defaultOllamaEndpoint = process.env.OLLAMA_ENDPOINT || 'http://host.docker.internal:11434';
+const defaultOllamaEndpoint = process.env.OLLAMA_ENDPOINT || 'http://127.0.0.1:11434';
 let geminiKeyConfig = readStoredGeminiKeys();
 let geminiKeys = geminiKeyConfig.keys;
 
@@ -452,10 +452,44 @@ sf.write(output_file, samples, sample_rate)
 });
 NODE_EOF
 
+cat > "${BUILD_DIR}/start.sh" <<'START_EOF'
+#!/bin/sh
+set -eu
+
+ollama serve &
+OLLAMA_PID=$!
+APP_PID=''
+
+cleanup() {
+  [ -z "${APP_PID}" ] || kill "${APP_PID}" 2>/dev/null || true
+  kill "${OLLAMA_PID}" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+attempt=0
+until curl -fsS http://127.0.0.1:11434/api/tags >/dev/null; do
+  attempt=$((attempt + 1))
+  if [ "${attempt}" -ge 30 ] || ! kill -0 "${OLLAMA_PID}" 2>/dev/null; then
+    echo "Ollama did not become ready" >&2
+    exit 1
+  fi
+  sleep 1
+done
+
+# This is normally an instant local check because the default model is baked
+# into the image. It also allows OLLAMA_MODEL to select and fetch another model.
+ollama pull "${OLLAMA_MODEL:-llama3.2:1b}"
+
+node /app/server.js &
+APP_PID=$!
+wait "${APP_PID}"
+START_EOF
+
 cat > "${BUILD_DIR}/Dockerfile" <<'DOCKER_EOF'
 FROM node:22-bookworm-slim
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl espeak-ng python3-pip \
+  && apt-get install -y --no-install-recommends ca-certificates curl espeak-ng python3-pip zstd \
+  && curl -fsSL https://ollama.com/install.sh | sh \
   && pip3 install --break-system-packages --no-cache-dir piper-tts kokoro-onnx soundfile \
   && mkdir -p /app/piper /app/kokoro \
   && curl -fsSL -o /app/piper/en_GB-southern_english_female-low.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/southern_english_female/low/en_GB-southern_english_female-low.onnx \
@@ -464,10 +498,22 @@ RUN apt-get update \
   && curl -fsSL -o /app/kokoro/voices-v1.0.bin https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
+RUN ollama serve >/tmp/ollama-build.log 2>&1 & \
+  ollama_pid=$!; \
+  attempt=0; \
+  until curl -fsS http://127.0.0.1:11434/api/tags >/dev/null; do \
+    attempt=$((attempt + 1)); \
+    if [ "$attempt" -ge 30 ] || ! kill -0 "$ollama_pid" 2>/dev/null; then cat /tmp/ollama-build.log; exit 1; fi; \
+    sleep 1; \
+  done; \
+  ollama pull llama3.2:1b; \
+  kill "$ollama_pid"; \
+  wait "$ollama_pid" || true
 WORKDIR /app
-COPY index.html server.js ./
-ENV PORT=3014
-CMD ["node", "server.js"]
+COPY index.html server.js start.sh ./
+RUN chmod +x /app/start.sh
+ENV PORT=3014 OLLAMA_MODEL=llama3.2:1b
+CMD ["/app/start.sh"]
 DOCKER_EOF
 
 echo "Building Docker image..."
@@ -486,6 +532,7 @@ DOCKER_RUN_ARGS=(
   -e GEMINI_API_KEY_SECONDARY
   -e GEMINI_MODEL
   -e OLLAMA_ENDPOINT
+  -e OLLAMA_MODEL
   -e PIPER_BINARY
   -e KOKORO_MODEL
   -e KOKORO_VOICES
@@ -545,7 +592,7 @@ echo "URL: http://localhost:${PORT_ARG}/"
 echo "App file: http://localhost:${PORT_ARG}/index.html"
 echo "Local TTS: http://localhost:${PORT_ARG}/api/tts
 Gemini proxy: http://localhost:${PORT_ARG}/api/gemini
-Ollama proxy: http://localhost:${PORT_ARG}/api/ollama (defaults host Ollama to ${OLLAMA_ENDPOINT:-http://host.docker.internal:11434})
+Ollama proxy: http://localhost:${PORT_ARG}/api/ollama (bundled ${OLLAMA_MODEL:-llama3.2:1b} at ${OLLAMA_ENDPOINT:-http://127.0.0.1:11434})
 Gemini keys: enter keys in Settings to save them on the shared Docker volume, or seed them with GEMINI_API_KEY, GEMINI_API_KEY_PRIMARY, or GEMINI_API_KEY_SECONDARY before running deploy.sh
-eSpeak, a default UK English local Piper voice, and Kokoro-82M are bundled. Override PIPER_MODEL to use a mounted Piper .onnx voice model, or KOKORO_MODEL/KOKORO_VOICES/KOKORO_VOICE for Kokoro."
+Ollama with llama3.2:1b, eSpeak, a default UK English local Piper voice, and Kokoro-82M are bundled. Override OLLAMA_MODEL to pull another Ollama model at startup, PIPER_MODEL to use a mounted Piper .onnx voice model, or KOKORO_MODEL/KOKORO_VOICES/KOKORO_VOICE for Kokoro."
 echo "========================================="
